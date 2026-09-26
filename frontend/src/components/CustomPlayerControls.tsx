@@ -6,7 +6,9 @@ import {
   Maximize,
 } from 'lucide-react'
 import { VolumeControl } from './VolumeControl'
-import type { ChaptersSettings, PlayerControlsConfig } from '../types/video'
+import type { ChaptersSettings, PlayerControlsConfig, SmartProgressSettings } from '../types/video'
+import { SMART_STRIP_CONTROLS_OFFSET } from './SmartProgressBar'
+import { resolveSmartProgress } from '../utils/smartProgress'
 
 interface CustomPlayerControlsProps {
   isPlaying: boolean
@@ -18,6 +20,7 @@ interface CustomPlayerControlsProps {
   primaryColor: string
   controlsConfig?: PlayerControlsConfig
   chapters?: ChaptersSettings
+  smartProgress?: SmartProgressSettings
   onTogglePlay: () => void
   onToggleMute: () => void
   onVolumeChange?: (val: number) => void
@@ -38,6 +41,7 @@ export const CustomPlayerControls: React.FC<CustomPlayerControlsProps> = ({
   primaryColor,
   controlsConfig = {},
   chapters,
+  smartProgress,
   onTogglePlay,
   onToggleMute,
   onVolumeChange = () => {},
@@ -63,6 +67,9 @@ export const CustomPlayerControls: React.FC<CustomPlayerControlsProps> = ({
   }
 
   const hasChapters = chapters?.enabled && chapters.items && chapters.items.length >= 2
+  // Progresso Inteligente: a barra vira uma faixa na borda do player (SmartProgressStrip),
+  // renderizada fora dos controles; aqui só reservamos o espaço dela embaixo
+  const smartCfg = resolveSmartProgress(smartProgress)
 
   return (
     <div
@@ -74,6 +81,7 @@ export const CustomPlayerControls: React.FC<CustomPlayerControlsProps> = ({
         right: 0,
         background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 65%, transparent 100%)',
         padding: '0.5rem 0.65rem',
+        ...(smartCfg.enabled && progressBar ? { paddingBottom: SMART_STRIP_CONTROLS_OFFSET } : {}),
         display: 'flex',
         flexDirection: 'column',
         gap: '0.4rem',
@@ -83,7 +91,7 @@ export const CustomPlayerControls: React.FC<CustomPlayerControlsProps> = ({
       onClick={(e) => e.stopPropagation()}
     >
       {/* Barra de Progresso (Segmentada por Capítulos se ativo, ou Contínua) */}
-      {progressBar && (
+      {progressBar && !smartCfg.enabled && (
         hasChapters ? (
           <div
             data-testid="embed-chapters-progress-bar"

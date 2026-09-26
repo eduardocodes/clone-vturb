@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -71,6 +71,11 @@ class ChaptersSettings(BaseModel):
     enabled: bool = False
     items: List[ChapterItem] = Field(default_factory=list)
 
+class SmartProgressSettings(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    enabled: bool = False
+    intensity: Literal["suave", "medio", "forte"] = "medio"  # curva da barra: anda rapido no inicio e desacelera no fim
+
 class PlayerSettings(BaseModel):
     model_config = ConfigDict(extra="allow")
     primary_color: str = "#6366f1"
@@ -91,6 +96,7 @@ class PlayerSettings(BaseModel):
     domain_protection: Optional[DomainProtectionSettings] = None
     controls_config: Optional[PlayerControlsConfig] = None
     chapters: Optional[ChaptersSettings] = None
+    smart_progress: Optional[SmartProgressSettings] = None
     transparent_background: Optional[bool] = False
     remove_black_bars: Optional[bool] = True
     fit_mode: Optional[str] = "cover"

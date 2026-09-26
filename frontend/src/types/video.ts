@@ -69,6 +69,13 @@ export interface ChaptersSettings {
   items: ChapterItem[]
 }
 
+export type SmartProgressIntensity = 'suave' | 'medio' | 'forte'
+
+export interface SmartProgressSettings {
+  enabled: boolean
+  intensity: SmartProgressIntensity
+}
+
 export interface PlayerSettings {
   primary_color: string
   autoplay: boolean
@@ -92,6 +99,7 @@ export interface PlayerSettings {
   domain_protection?: DomainProtectionSettings
   controls_config?: PlayerControlsConfig
   chapters?: ChaptersSettings
+  smart_progress?: SmartProgressSettings
   transparent_background?: boolean
   remove_black_bars?: boolean
   fit_mode?: 'cover' | 'contain'

@@ -1,13 +1,15 @@
 import React, { useState } from 'react'
 import { Palette, Save } from 'lucide-react'
-import type { Video, ChaptersSettings } from '../../types/video'
+import type { Video, ChaptersSettings, SmartProgressSettings } from '../../types/video'
 import { updateVideo } from '../../services/api'
 import {
   StylingControlsPanel,
   StylingAppearancePanel,
   StylingVideoPreview,
   StylingChaptersPanel,
+  StylingSmartProgressPanel,
 } from './styling'
+import { resolveSmartProgress } from '../../utils/smartProgress'
 
 interface VideoStylingTabProps {
   video: Video
@@ -35,6 +37,9 @@ export const VideoStylingTab: React.FC<VideoStylingTabProps> = ({ video, onSave,
   )
   const [chapters, setChapters] = useState<ChaptersSettings>(
     currentSettings.chapters || { enabled: false, items: [] }
+  )
+  const [smartProgress, setSmartProgress] = useState<SmartProgressSettings>(
+    resolveSmartProgress(currentSettings.smart_progress)
   )
 
   // Estados Visuais do Player
@@ -71,6 +76,7 @@ export const VideoStylingTab: React.FC<VideoStylingTabProps> = ({ video, onSave,
             video_time: videoTime,
           },
           chapters: chapters,
+          smart_progress: smartProgress,
         },
       })
       onSave(updated)
@@ -153,6 +159,7 @@ export const VideoStylingTab: React.FC<VideoStylingTabProps> = ({ video, onSave,
         aspectRatio={aspectRatio}
         onAspectRatioChange={setAspectRatio}
         chapters={chapters}
+        smartProgress={smartProgress}
       />
 
       {/* GRID INFERIOR: Coluna Esquerda (Controles + Capítulos) + Coluna Direita (Aparência & Proporção) */}
@@ -181,6 +188,12 @@ export const VideoStylingTab: React.FC<VideoStylingTabProps> = ({ video, onSave,
             chapters={chapters}
             onChange={setChapters}
             videoDuration={video.duration || 60}
+          />
+
+          <StylingSmartProgressPanel
+            smartProgress={smartProgress}
+            onChange={setSmartProgress}
+            progressBarVisible={progressBar}
           />
         </div>
 

@@ -44,6 +44,9 @@ Plataforma completa de alta performance para hospedagem, gerenciamento e reprodu
 - **Modo Vertical Celular (9:16) & Capítulos do Vídeo**:
   - Suporte nativo ao formato vertical 9:16 ideal para vídeos estilo Shorts, Reels e TikTok.
   - Marcadores de capítulos navegáveis com tempo, título descritivo e switch de ativação rápida.
+- **Progresso Inteligente**:
+  - Barra de progresso que anda rápido no início e desacelera no final, fazendo o vídeo parecer mais curto.
+  - Intensidade Suave, Médio ou Forte, com prévia ao vivo na aba Estilização; barra apenas visual quando ativo.
 - **Gráfico de Retenção VTurb com Player Centralizado**:
   - Visualização de pico e curva de retenção por segundo com thumbnail e player sincronizado.
   - Sub-abas de métricas detalhadas com taxas de engajamento e filtros temporais.

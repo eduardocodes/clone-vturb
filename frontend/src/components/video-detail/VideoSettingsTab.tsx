@@ -86,6 +86,7 @@ export const VideoSettingsTab: React.FC<VideoSettingsTabProps> = ({ video, onSav
           ? { storage_key: uploadedVideo.storageKey, source_size_bytes: uploadedVideo.sizeBytes }
           : {}),
         player_settings: {
+          ...video.player_settings,
           primary_color: primaryColor,
           autoplay,
           show_controls: showControls,

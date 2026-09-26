@@ -485,3 +485,64 @@ def test_video_controls_styling_config():
 
 
 
+
+def test_video_smart_progress_setting():
+    """Valida persistência do Progresso Inteligente (smart_progress) via POST e PUT."""
+    create_res = client.post("/videos/", json={
+        "title": "Vídeo Progresso Inteligente",
+        "video_url": "https://cdn.exemplo.com/progresso.mp4",
+        "duration": 300.0,
+        "player_settings": {
+            "primary_color": "#ef4444",
+            "smart_progress": {"enabled": True, "intensity": "forte"}
+        }
+    })
+    assert create_res.status_code == 201
+    video = create_res.json()
+    video_id = video["id"]
+    assert video["player_settings"]["smart_progress"] == {"enabled": True, "intensity": "forte"}
+
+    update_res = client.put(f"/videos/{video_id}", json={
+        "player_settings": {
+            **video["player_settings"],
+            "smart_progress": {"enabled": False, "intensity": "suave"}
+        }
+    })
+    assert update_res.status_code == 200
+    assert update_res.json()["player_settings"]["smart_progress"] == {"enabled": False, "intensity": "suave"}
+
+    get_res = client.get(f"/videos/{video_id}")
+    assert get_res.json()["player_settings"]["smart_progress"]["intensity"] == "suave"
+
+    client.delete(f"/videos/{video_id}")
+
+def test_video_smart_progress_defaults_and_absence():
+    """Sem a chave, o vídeo continua válido; com a chave parcial, aplica os padrões."""
+    res_without = client.post("/videos/", json={
+        "title": "Vídeo sem Progresso Inteligente",
+        "video_url": "https://cdn.exemplo.com/sem.mp4",
+        "player_settings": {"primary_color": "#111111"}
+    })
+    assert res_without.status_code == 201
+    assert res_without.json()["player_settings"].get("smart_progress") is None
+
+    res_partial = client.post("/videos/", json={
+        "title": "Vídeo com Progresso Inteligente parcial",
+        "video_url": "https://cdn.exemplo.com/parcial.mp4",
+        "player_settings": {"smart_progress": {"enabled": True}}
+    })
+    assert res_partial.status_code == 201
+    assert res_partial.json()["player_settings"]["smart_progress"] == {"enabled": True, "intensity": "medio"}
+
+    client.delete(f"/videos/{res_without.json()['id']}")
+    client.delete(f"/videos/{res_partial.json()['id']}")
+
+@pytest.mark.parametrize("intensity", ["turbo", "", "FORTE", 3])
+def test_video_smart_progress_rejects_invalid_intensity(intensity):
+    """Intensidade fora de suave/medio/forte é rejeitada com 422."""
+    res = client.post("/videos/", json={
+        "title": "Vídeo intensidade inválida",
+        "video_url": "https://cdn.exemplo.com/invalido.mp4",
+        "player_settings": {"smart_progress": {"enabled": True, "intensity": intensity}}
+    })
+    assert res.status_code == 422
