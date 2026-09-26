@@ -72,6 +72,37 @@ services:
           cpus: "1"
           memory: 768M
 
+  # Consolida métricas (e, na fase de HLS, processa os vídeos). Mesma imagem do backend.
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile.prod
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    environment:
+      ENVIRONMENT: production
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      DATABASE_URL: postgresql://vturb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/vturb
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD}
+      JWT_SECRET_KEY: ${SERVICE_PASSWORD_64_JWT}
+      STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL}
+      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID}
+      STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL}
+      RAW_RETENTION_DAYS: ${RAW_RETENTION_DAYS:-90}
+    healthcheck:
+      disable: true
+    depends_on:
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1024M
+
   frontend:
     build:
       context: ..

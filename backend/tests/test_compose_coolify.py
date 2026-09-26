@@ -72,3 +72,14 @@ def test_backend_em_modo_producao_com_cors_definido(compose):
     env = compose["services"]["backend"]["environment"]
     assert env["ENVIRONMENT"] == "production"
     assert str(env["CORS_ORIGINS"]).startswith("${")
+
+
+def test_worker_usa_a_mesma_imagem_e_espera_o_backend(compose):
+    worker = compose["services"]["worker"]
+    backend = compose["services"]["backend"]
+    assert worker["build"] == backend["build"]
+    command = worker["command"]
+    assert "app.worker" in (" ".join(command) if isinstance(command, list) else command)
+    # Migrations rodam no boot do backend: o worker só sobe depois dele saudável
+    assert worker["depends_on"]["backend"]["condition"] == "service_healthy"
+    assert worker["environment"]["DATABASE_URL"] == backend["environment"]["DATABASE_URL"]
