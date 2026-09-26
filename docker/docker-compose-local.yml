@@ -41,9 +41,32 @@ services:
       - ../backend:/app
       # Composes de deploy visíveis para os testes de configuração
       - ../docker:/docker:ro
+      # Contratos compartilhados com o frontend (testes de contrato)
+      - ../contracts:/contracts:ro
     depends_on:
       postgres:
         condition: service_healthy
+
+  # Mesma imagem do backend (buildada pelo serviço backend), outro processo
+  worker:
+    image: projetovturb-backend
+    container_name: worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: postgresql://vturb_user:vturb_password@postgres:5432/vturb_db
+      STORAGE_ENDPOINT_URL: http://seaweedfs:8333
+      STORAGE_PRESIGN_ENDPOINT_URL: http://localhost:8333
+      STORAGE_ACCESS_KEY_ID: vturbdev
+      STORAGE_SECRET_ACCESS_KEY: vturbdevsecret
+      STORAGE_BUCKET: vturb-dev
+      STORAGE_PUBLIC_URL: http://localhost:8333/vturb-dev
+      STORAGE_REGION: us-east-1
+      WORKER_MAINTENANCE_INTERVAL: "60"
+    volumes:
+      - ../backend:/app
+    depends_on:
+      - backend
 
   frontend:
     build:
@@ -56,6 +79,7 @@ services:
     volumes:
       - ../frontend:/app
       - /app/node_modules
+      - ../contracts:/contracts:ro
     depends_on:
       - backend
 

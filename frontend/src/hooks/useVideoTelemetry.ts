@@ -1,7 +1,11 @@
 import { useRef, useEffect } from 'react'
 import type { Video } from '../types/video'
-import { sendTelemetryEvent } from '../services/api'
+import { sendTelemetryEvent, sendWatchRanges } from '../services/api'
+import { WatchRangeTracker } from '../utils/watchRanges'
 import { triggerTrackingPixels, initTrackingPixels } from '../utils/embedTracking'
+
+/** Envio periódico dos trechos assistidos enquanto houver novidade. */
+const WATCH_FLUSH_INTERVAL_MS = 30_000
 
 interface UseVideoTelemetryProps {
   video: Video | null
@@ -21,6 +25,35 @@ export function useVideoTelemetry({
   const pitchDelaySent = useRef(false)
   const impressionSent = useRef(false)
   const pixelsInitialized = useRef(false)
+  const watchTracker = useRef(new WatchRangeTracker())
+  const durationRef = useRef(0)
+
+  // Trechos assistidos (curva de retenção): a cada 30s e ao ocultar/fechar a página
+  const flushWatchRanges = () => {
+    const ranges = watchTracker.current.takeIfChanged()
+    if (!ranges) return
+    sendWatchRanges(videoId, { session_id: visitorId, duration: durationRef.current, ranges })
+  }
+  const flushRef = useRef(flushWatchRanges)
+  useEffect(() => {
+    flushRef.current = flushWatchRanges
+  })
+
+  useEffect(() => {
+    const flush = () => flushRef.current()
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    const interval = window.setInterval(flush, WATCH_FLUSH_INTERVAL_MS)
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', flush)
+      flush()
+    }
+  }, [])
 
   useEffect(() => {
     if (video?.player_settings?.tracking_pixels?.enabled && !pixelsInitialized.current) {
@@ -48,6 +81,8 @@ export function useVideoTelemetry({
 
   const handleTimeUpdateProgress = (current: number, total: number) => {
     if (!video) return
+    if (total > 0) durationRef.current = total
+    watchTracker.current.observe(current)
 
     if (total > 0) {
       const pct = (current / total) * 100
@@ -101,6 +136,9 @@ export function useVideoTelemetry({
   }
 
   const handleEndedTelemetry = (duration: number) => {
+    if (duration > 0) durationRef.current = duration
+    watchTracker.current.observe(duration)
+    flushWatchRanges()
     if (!progressSent.current['100']) {
       progressSent.current['100'] = true
       sendTelemetryEvent(videoId, {

@@ -1,4 +1,4 @@
-import type { VideoMetrics } from '../../../types/video'
+import type { RetentionCurve, VideoMetrics } from '../../../types/video'
 
 export const formatTime = (secs: number): string => {
   const m = Math.floor(secs / 60)
@@ -98,4 +98,40 @@ export const generateHourlyPaths = (
   const hourlyAreaD = `${hourlyPathD} L 1000,190 L 0,190 Z`
 
   return { hourlyPathD, hourlyAreaD }
+}
+
+// --- Curva por segundo (retention_curve do backend) --------------------------------
+
+/** Retenção (0-100) no ponto `pct` (0-100) do vídeo de `duration` segundos. */
+export const curveRetentionAt = (curve: RetentionCurve, pct: number, duration: number): number => {
+  const values = curve.values
+  if (!values.length || curve.sessions <= 0 || duration <= 0) return 0
+  const second = (Math.max(0, Math.min(100, pct)) / 100) * duration
+  const pos = second / curve.bucket_seconds
+  if (pos > values.length - 1) {
+    // Depois do último trecho com dado: ninguém assistiu
+    return pos < values.length ? Math.max(0, Math.min(100, values[values.length - 1] * 100)) : 0
+  }
+  const i = Math.floor(pos)
+  const next = Math.min(values.length - 1, i + 1)
+  const value = values[i] + (values[next] - values[i]) * (pos - i)
+  return Math.max(0, Math.min(100, value * 100))
+}
+
+/** Caminho SVG da curva com o eixo X no tempo do vídeo (0 a `duration`). */
+export const generateCurvePaths = (curve: RetentionCurve, duration: number) => {
+  const values = curve.values
+  if (!values.length || curve.sessions <= 0 || duration <= 0) {
+    return { retentionPathD: 'M 0,190 L 1000,190', retentionAreaD: 'M 0,190 L 1000,190 L 1000,190 L 0,190 Z' }
+  }
+  const toX = (second: number) => Math.round(Math.min(1, second / duration) * 10000) / 10
+  const toY = (fraction: number) => Math.round(getYCoordinate(Math.max(0, Math.min(100, fraction * 100))) * 100) / 100
+  const parts = values.map((v, idx) => `${idx === 0 ? 'M' : 'L'} ${toX(idx * curve.bucket_seconds)},${toY(v)}`)
+  const lastSecond = values.length * curve.bucket_seconds
+  if (lastSecond < duration) {
+    // Queda para zero logo depois do último trecho assistido, e chão até o fim
+    parts.push(`L ${toX(lastSecond)},190`, 'L 1000,190')
+  }
+  const retentionPathD = parts.join(' ')
+  return { retentionPathD, retentionAreaD: `${retentionPathD} L 1000,190 L 0,190 Z` }
 }

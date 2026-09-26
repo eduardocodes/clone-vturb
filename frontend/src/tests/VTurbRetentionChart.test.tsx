@@ -155,8 +155,9 @@ describe('VTurbRetentionChart - Gráfico Oficial VTurb com Vídeo Centralizado',
     fireEvent.click(devicesTab)
 
     expect(screen.getByTestId('vturb-panel-devices')).toBeInTheDocument()
-    expect(screen.getByText(/Celular \(Mobile\)/i)).toBeInTheDocument()
-    expect(screen.getByText(/Desktop \(Computador\)/i)).toBeInTheDocument()
+    // Sem coleta de dispositivo no player: o painel avisa em vez de mostrar números de exemplo
+    expect(screen.getByTestId('vturb-panel-devices-empty')).toHaveTextContent(/ainda não coletamos/i)
+    expect(screen.queryByText(/82%/)).not.toBeInTheDocument()
   })
 
   it('trata graciosamente vídeo sem thumbnail exibindo fallback elegante', () => {

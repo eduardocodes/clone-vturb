@@ -37,6 +37,13 @@ Documento de referência para decisões de arquitetura e produto do ProjetoVturb
   - Retenção Média de Tempo Assistido e Funil (25%, 50%, 75%, 100%)
   - Cliques no Player / CTA (CTR)
 - [x] Toda agregação respeita o identificador do vídeo.
+- [x] Os tipos de evento aceitos vêm de `contracts/analytics-events.json`, lido pelo backend e pelo frontend (teste de contrato nos dois lados). Evento fora da lista é recusado com 422.
+- [x] Deduplicação: só `play` repetido pela mesma sessão em menos de 1 segundo é descartado (duplo disparo do player). Impressões e marcos contam a cada carregamento; os totais contam tudo e os únicos são sessões distintas por dia.
+- [x] Retenção por segundo: o player envia os trechos assistidos (segundos do vídeo, não do relógio) a cada 30s, ao esconder a aba e ao terminar, via `sendBeacon` (`POST /videos/{id}/watch`, `text/plain`). O backend une os trechos por sessão e dia, limita a 500 trechos e à duração do vídeo (teto de 4h) e preenche a duração do vídeo se ela estiver zerada.
+- [x] A curva de retenção é a fração de sessões que viram cada segundo; o tempo médio assistido é o total de segundos assistidos dividido pelas sessões.
+- [x] Consolidação: o container `worker` roda a cada `WORKER_MAINTENANCE_INTERVAL` (padrão 300s), com trava no Postgres para rodar uma instância por vez. Fecha horas encerradas (totais) e dias encerrados (únicos e curva). O painel soma o consolidado até a watermark com o bruto depois dela, então os números ficam ao vivo.
+- [x] Eventos brutos e trechos com mais de `RAW_RETENTION_DAYS` (padrão 90) são apagados, e só depois de consolidados.
+- [x] Dispositivo, país, sistema, navegador e origem ainda não são coletados: o painel diz isso em vez de mostrar números de exemplo.
 - [x] Filtros por data e período: suporte a Hoje (`today`), Ontem (`yesterday`), 7 Dias (`7d`), 30 Dias (`30d`), 1 Ano (`1y`), Todo o Período (`all`) e Intervalo Personalizado (De / Até).
 - [x] Gráfico estilo VTurb de distribuição horária (24 horas) com identificação automática do horário de pico de acessos/plays e consolidação por turnos (madrugada, manhã, tarde, noite).
 - [x] Gráfico Oficial VTurb de Retenção & Audiência: Gráfico com visual dark (#000000), imagem do vídeo centralizada na área gráfica com efeito de fusão, curva SVG verde neon suave, eixos Y (0% a 100%) e X com timestamps calculados pela duração do vídeo (ou distribuição horária 24h), linha vertical tracejada interativa (scrubber com ponto verde) e tooltip flutuante exibindo tempo/horário, audiência e retenção, além de sub-navegação por Dispositivos, Navegadores, Países e Origem do Tráfego.

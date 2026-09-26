@@ -1,4 +1,5 @@
 import type { Video, VideoMetrics, PlayerSettings } from '../types/video'
+import type { AnalyticsEventType, WatchRangesPayload } from '../types/analytics'
 import type {
   LoginResponse,
   User,
@@ -186,7 +187,7 @@ export async function fetchVideoMetrics(
 export async function sendTelemetryEvent(
   videoId: string,
   event: {
-    event_type: string
+    event_type: AnalyticsEventType
     watch_time_seconds?: number
     session_id?: string
     referer?: string
@@ -200,6 +201,28 @@ export async function sendTelemetryEvent(
     })
   } catch (err) {
     console.error('Erro ao enviar telemetria:', err)
+  }
+}
+
+/**
+ * Trechos assistidos da sessão (curva de retenção). Usa sendBeacon com text/plain:
+ * sobrevive ao fechar a aba e não dispara preflight de CORS.
+ */
+export function sendWatchRanges(videoId: string, payload: WatchRangesPayload): void {
+  const url = `${getApiBaseUrl()}/videos/${videoId}/watch`
+  const body = JSON.stringify(payload)
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      if (navigator.sendBeacon(url, new Blob([body], { type: 'text/plain;charset=UTF-8' }))) return
+    }
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body,
+      keepalive: true,
+    }).catch(() => undefined)
+  } catch (err) {
+    console.error('Erro ao enviar trechos assistidos:', err)
   }
 }
 

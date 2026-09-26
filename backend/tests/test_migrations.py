@@ -12,6 +12,7 @@ from app.core.migrations import BASELINE_REVISION, alembic_config, run_migration
 from tests.db_utils import derive_test_database_url, recreate_database
 
 import app.models.backup  # noqa: F401
+import app.models.metrics  # noqa: F401
 import app.models.user  # noqa: F401
 import app.models.video  # noqa: F401
 
@@ -103,3 +104,23 @@ def test_schema_migrado_bate_com_os_models():
     finally:
         engine.dispose()
     assert diff == []
+
+
+def test_0003_preserva_eventos_existentes(scratch_db):
+    from alembic import command
+
+    url, engine = scratch_db
+    command.upgrade(alembic_config(url), "0002_video_storage")
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO videos (id, title, video_url, duration) VALUES ('v1', 'V', 'https://x', 10)"))
+        for _ in range(3):
+            conn.execute(text(
+                "INSERT INTO video_analytics (video_id, event_type, session_id, created_at, watch_time_seconds) "
+                "VALUES ('v1', 'play', 's1', '2026-09-20 10:00:00+00', 0)"
+            ))
+
+    run_migrations(url)
+
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM video_analytics")).scalar() == 3
+        assert "video_metrics_daily" in inspect(conn).get_table_names()

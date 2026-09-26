@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.database import Base
 from app.core.db_url import engine_url
 import app.models.backup  # noqa: F401
+import app.models.metrics  # noqa: F401
 import app.models.user  # noqa: F401
 import app.models.video  # noqa: F401
 

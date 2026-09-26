@@ -12,6 +12,8 @@ import {
   getInterpolatedRetention,
   generateRetentionPaths,
   generateHourlyPaths,
+  curveRetentionAt,
+  generateCurvePaths,
 } from './retentionChartHelpers'
 
 interface VTurbRetentionChartProps {
@@ -30,7 +32,14 @@ export const VTurbRetentionChart: React.FC<VTurbRetentionChartProps> = ({
   const [cursorPercent, setCursorPercent] = useState<number>(44) // Ponto padrão 44% (~01:05)
   const chartRef = useRef<HTMLDivElement>(null)
 
-  const duration = video.duration > 0 ? video.duration : 147
+  const curveData = metrics.retention_curve && metrics.retention_curve.sessions > 0 ? metrics.retention_curve : null
+  // Sem duração cadastrada, a curva indica até onde há dado; 147s é o padrão antigo do gráfico
+  const duration =
+    video.duration > 0
+      ? video.duration
+      : curveData
+      ? curveData.values.length * curveData.bucket_seconds
+      : 147
   const totalPlays = metrics.total_plays || 0
   const hourlyList = metrics.hourly_distribution || []
 
@@ -55,17 +64,20 @@ export const VTurbRetentionChart: React.FC<VTurbRetentionChartProps> = ({
     plays: 0,
   }
 
-  const currentRetentionData = getInterpolatedRetention(
-    cursorPercent,
-    retentionValues,
-    totalPlays,
-    audienceBase
-  )
+  // Curva por segundo (trechos realmente assistidos) quando o backend já tem sessões;
+  // sem ela (dados antigos), interpola entre os marcos de 25/50/75/100%.
+  const curve = curveData
+  const currentRetentionData = curve
+    ? (() => {
+        const retention = curveRetentionAt(curve, cursorPercent, duration)
+        return { retention, audience: Math.round((retention / 100) * curve.sessions) }
+      })()
+    : getInterpolatedRetention(cursorPercent, retentionValues, totalPlays, audienceBase)
   const currentSecs = Math.round((cursorPercent / 100) * duration)
   const currentTimeFormatted = formatTime(currentSecs)
 
   // Geração dos caminhos SVG
-  const { retentionPathD, retentionAreaD } = generateRetentionPaths(retentionValues)
+  const { retentionPathD, retentionAreaD } = curve ? generateCurvePaths(curve, duration) : generateRetentionPaths(retentionValues)
   const { hourlyPathD, hourlyAreaD } = generateHourlyPaths(hourlyList, maxActivity)
 
   const activePathD = activeTab === 'hourly' ? hourlyPathD : retentionPathD
@@ -75,7 +87,7 @@ export const VTurbRetentionChart: React.FC<VTurbRetentionChartProps> = ({
   const dotYPct =
     activeTab === 'hourly'
       ? 100 - (selectedHourData.plays / maxActivity) * 100
-      : totalPlays > 0
+      : totalPlays > 0 || curve
       ? 100 - currentRetentionData.retention
       : 98
 

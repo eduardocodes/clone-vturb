@@ -1,0 +1,19 @@
+{
+  "description": "Contrato dos eventos que o player envia para POST /videos/{id}/events. Lido pelos testes do backend e do frontend: mudar aqui obriga a mudar os dois lados.",
+  "event_types": [
+    "impression",
+    "play",
+    "progress_25",
+    "progress_50",
+    "progress_75",
+    "progress_100",
+    "click"
+  ],
+  "burst_deduplicated": {
+    "event_types": [
+      "play"
+    ],
+    "window_seconds": 1,
+    "note": "Play repetido da mesma sessão dentro da janela é ignorado. Os outros marcos são enviados uma vez por carregamento do player; recarregar a página conta de novo (total != únicos)."
+  }
+}

@@ -1,6 +1,6 @@
-from typing import Optional, Dict, Any, List, Literal
+from typing import Optional, Dict, Any, List, Literal, get_args
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 class SmartAutoplaySettings(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -139,11 +139,33 @@ class VideoResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+# Contrato com o player: contracts/analytics-events.json (teste de contrato nos dois lados)
+EventType = Literal["impression", "play", "progress_25", "progress_50", "progress_75", "progress_100", "click"]
+EVENT_TYPES: tuple[str, ...] = get_args(EventType)
+MAX_WATCH_SECONDS = 86400.0
+MAX_WATCH_RANGES = 500
+
+
 class AnalyticsEventCreate(BaseModel):
-    event_type: str = Field(..., description="impression, play, progress_25, progress_50, progress_75, progress_100, click")
-    watch_time_seconds: Optional[float] = 0.0
-    session_id: Optional[str] = None
+    event_type: EventType
+    watch_time_seconds: Optional[float] = Field(0.0, ge=0, le=MAX_WATCH_SECONDS)
+    session_id: Optional[str] = Field(None, max_length=100)
+    # Truncado (não recusado): document.referrer pode ser longo em LPs com UTMs
     referer: Optional[str] = None
+
+
+class WatchRangesPayload(BaseModel):
+    """Trechos assistidos enviados pelo player via sendBeacon (união acumulada da sessão)."""
+    session_id: str = Field(..., min_length=1, max_length=100)
+    duration: float = Field(..., ge=0, le=MAX_WATCH_SECONDS)
+    ranges: List[List[float]] = Field(..., max_length=MAX_WATCH_RANGES)
+
+    @field_validator("ranges")
+    @classmethod
+    def _pairs(cls, value: List[List[float]]) -> List[List[float]]:
+        if any(len(item) != 2 for item in value):
+            raise ValueError("Cada trecho deve ser [início, fim].")
+        return value
 
 class HourlyMetric(BaseModel):
     hour: int
@@ -158,6 +180,12 @@ class PeakHour(BaseModel):
     impressions: int
     plays: int
     total_activity: int
+
+class RetentionCurve(BaseModel):
+    bucket_seconds: int
+    sessions: int
+    values: List[float]
+
 
 class VideoMetricsResponse(BaseModel):
     video_id: str
@@ -176,6 +204,8 @@ class VideoMetricsResponse(BaseModel):
     retention: Dict[str, int]
     hourly_distribution: List[HourlyMetric] = []
     peak_hour: Optional[PeakHour] = None
+    # Curva por segundo: fração das sessões que assistiu cada trecho de `bucket_seconds`
+    retention_curve: Optional["RetentionCurve"] = None
 
 
 class BulkDeleteRequest(BaseModel):

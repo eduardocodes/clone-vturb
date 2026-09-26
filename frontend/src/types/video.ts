@@ -120,6 +120,13 @@ export interface Video {
   updated_at: string
 }
 
+/** Curva por segundo: fração das sessões que assistiu cada faixa de `bucket_seconds`. */
+export interface RetentionCurve {
+  bucket_seconds: number
+  sessions: number
+  values: number[]
+}
+
 export interface HourlyMetric {
   hour: number
   label: string
@@ -155,6 +162,7 @@ export interface VideoMetrics {
     '75%': number
     '100%': number
   }
+  retention_curve?: RetentionCurve | null
   hourly_distribution?: HourlyMetric[]
   peak_hour?: PeakHour | null
 }
