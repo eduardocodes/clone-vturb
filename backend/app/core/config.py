@@ -10,9 +10,26 @@ if env_file.exists():
 else:
     load_dotenv()
 
+DEFAULT_JWT_SECRET = "sua-chave-secreta-super-segura-vturb-jwt-2026"
+DEFAULT_SUPER_ADMIN_PASSWORD = "Admin123456!"
+MIN_JWT_SECRET_LENGTH = 32
+
+
+def _csv(value: str) -> list[str]:
+    return [item.strip().rstrip("/") for item in value.split(",") if item.strip()]
+
+
+def _bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class Settings:
     PROJECT_NAME: str = "ProjetoVturb"
-    ENVIRONMENT: str = "development"
+    # "production" liga as travas de segurança (boot recusa segredo padrão, docs fechadas)
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").strip().lower()
+    # Origens liberadas no CORS (domínio do painel). Vazio em dev = qualquer origem.
+    CORS_ORIGINS: list[str] = _csv(os.getenv("CORS_ORIGINS", ""))
+    RATE_LIMIT_ENABLED: bool = _bool(os.getenv("RATE_LIMIT_ENABLED", "true"))
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
         "postgresql://vturb_user:vturb_password@localhost:5434/vturb_db"
@@ -27,10 +44,10 @@ class Settings:
 
     # Credenciais do Super Admin
     SUPER_ADMIN_EMAIL: str = os.getenv("SUPER_ADMIN_EMAIL", "admin@vturb.com")
-    SUPER_ADMIN_PASSWORD: str = os.getenv("SUPER_ADMIN_PASSWORD", "Admin123456!")
+    SUPER_ADMIN_PASSWORD: str = os.getenv("SUPER_ADMIN_PASSWORD", DEFAULT_SUPER_ADMIN_PASSWORD)
 
     # Autenticação JWT
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "sua-chave-secreta-super-segura-vturb-jwt-2026")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", DEFAULT_JWT_SECRET)
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_HOURS: int = int(
         os.getenv("JWT_ACCESS_TOKEN_EXPIRE_HOURS", "24h").lower().replace("h", "").strip()
@@ -40,5 +57,32 @@ class Settings:
     BREVO_API_KEY: str = os.getenv("BREVO_API_KEY", "")
     BREVO_SENDER_EMAIL: str = os.getenv("BREVO_SENDER_EMAIL", "noreply@vturb.com")
     BREVO_SENDER_NAME: str = os.getenv("BREVO_SENDER_NAME", "Smart VSL")
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT == "production"
+
+
+def production_config_problems(cfg) -> list[str]:
+    """Lista o que impede subir em produção. Vazio = pode subir (ou não é produção)."""
+    if getattr(cfg, "ENVIRONMENT", "") != "production":
+        return []
+    problems = []
+    secret = cfg.JWT_SECRET_KEY or ""
+    if secret == DEFAULT_JWT_SECRET or len(secret) < MIN_JWT_SECRET_LENGTH:
+        problems.append(f"JWT_SECRET_KEY precisa ser aleatória e ter ao menos {MIN_JWT_SECRET_LENGTH} caracteres.")
+    if not cfg.SUPER_ADMIN_PASSWORD or cfg.SUPER_ADMIN_PASSWORD == DEFAULT_SUPER_ADMIN_PASSWORD:
+        problems.append("SUPER_ADMIN_PASSWORD não pode ficar vazia nem com o valor padrão.")
+    origins = list(cfg.CORS_ORIGINS or [])
+    if not origins or "*" in origins:
+        problems.append("CORS_ORIGINS precisa listar o domínio do painel (sem '*').")
+    return problems
+
+
+def assert_production_ready(cfg) -> None:
+    problems = production_config_problems(cfg)
+    if problems:
+        raise RuntimeError("Configuração insegura para produção: " + " | ".join(problems))
+
 
 settings = Settings()

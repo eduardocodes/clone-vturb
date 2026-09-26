@@ -13,10 +13,12 @@ services:
     networks:
       - network_swarm_public
     environment:
+      - ENVIRONMENT=production
       - DATABASE_URL=${DATABASE_URL}
+      - CORS_ORIGINS=${CORS_ORIGINS:?defina CORS_ORIGINS com o dominio do painel}
       - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-admin@vturb.com}
-      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:-Admin123456!}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-sua-chave-secreta-super-segura-vturb-jwt-2026}
+      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:?defina SUPER_ADMIN_PASSWORD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?defina JWT_SECRET_KEY (openssl rand -hex 32)}
       - JWT_ACCESS_TOKEN_EXPIRE_HOURS=${JWT_ACCESS_TOKEN_EXPIRE_HOURS:-24h}
       - BACKBLAZE_KEY_ID=${BACKBLAZE_KEY_ID:-}
       - BACKBLAZE_APPLICATION_KEY=${BACKBLAZE_APPLICATION_KEY:-}
@@ -26,7 +28,6 @@ services:
       - BREVO_API_KEY=${BREVO_API_KEY:-}
       - BREVO_SENDER_EMAIL=${BREVO_SENDER_EMAIL:-noreply@vturb.com}
       - BREVO_SENDER_NAME=${BREVO_SENDER_NAME:-Smart VSL}
-      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-https://${BACKEND_DOMAIN:-api.seudominio.com}}
     volumes:
       - backend_uploads:/app/static/uploads
     healthcheck:
@@ -70,19 +71,7 @@ services:
     networks:
       - network_swarm_public
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-admin@vturb.com}
-      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:-Admin123456!}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-sua-chave-secreta-super-segura-vturb-jwt-2026}
-      - JWT_ACCESS_TOKEN_EXPIRE_HOURS=${JWT_ACCESS_TOKEN_EXPIRE_HOURS:-24h}
-      - BACKBLAZE_KEY_ID=${BACKBLAZE_KEY_ID:-}
-      - BACKBLAZE_APPLICATION_KEY=${BACKBLAZE_APPLICATION_KEY:-}
-      - BACKBLAZE_BUCKET_NAME=${BACKBLAZE_BUCKET_NAME:-}
-      - BACKBLAZE_ENDPOINT_URL=${BACKBLAZE_ENDPOINT_URL:-}
-      - BACKBLAZE_CDN_URL=${BACKBLAZE_CDN_URL:-}
-      - BREVO_API_KEY=${BREVO_API_KEY:-}
-      - BREVO_SENDER_EMAIL=${BREVO_SENDER_EMAIL:-noreply@vturb.com}
-      - BREVO_SENDER_NAME=${BREVO_SENDER_NAME:-Smart VSL}
+      # Só a URL da API: o frontend é público e não pode receber segredos do backend
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-https://${BACKEND_DOMAIN:-api.seudominio.com}}
     deploy:
       mode: replicated

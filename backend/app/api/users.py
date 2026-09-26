@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_allow_query_token
 from app.core.security import hash_password
 from app.models.user import User, UserInvite, PasswordResetToken
 from app.schemas.auth import (
@@ -26,6 +26,17 @@ router = APIRouter(prefix="/users", tags=["Gestão de Usuários"])
 
 def require_super_admin(current_user: User = Depends(get_current_user)) -> User:
     """Valida se o usuário autenticado é estritamente o Super Admin oficial ou possui privilégios de Super Admin."""
+    return _ensure_super_admin(current_user)
+
+
+def require_super_admin_allow_query_token(
+    current_user: User = Depends(get_current_user_allow_query_token),
+) -> User:
+    """Super Admin autenticado por header ou ?token= (links de download abertos no navegador)."""
+    return _ensure_super_admin(current_user)
+
+
+def _ensure_super_admin(current_user: User) -> User:
     official_email = settings.SUPER_ADMIN_EMAIL.strip().lower()
     is_official = (
         bool(current_user.is_super_admin) or

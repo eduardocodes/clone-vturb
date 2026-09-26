@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
-from app.core.config import settings
+from app.core.config import assert_production_ready, settings
 from app.core.database import SessionLocal
 from app.models.user import User
 from app.core.security import hash_password, verify_password
@@ -66,52 +66,70 @@ def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Schema e Super Admin são preparados por `python -m app.bootstrap` antes do
-    # uvicorn subir, uma vez por container (não por worker).
+    # uvicorn subir, uma vez por container (não por worker). Aqui só a trava de
+    # segurança: cada worker se recusa a subir com configuração insegura.
+    assert_production_ready(settings)
     yield
 
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    description="API do ProjetoVturb desenvolvida com FastAPI e PostgreSQL",
-    version="0.1.0",
-    lifespan=lifespan
-)
 
-# Exception Handler Global (regra obrigatória)
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Erro inesperado em {request.method} {request.url.path}: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Erro interno do servidor. Tente novamente mais tarde."}
+def create_app(cfg=settings) -> FastAPI:
+    is_production = cfg.ENVIRONMENT == "production"
+    docs_kwargs = (
+        {"docs_url": None, "redoc_url": None, "openapi_url": None} if is_production else {}
+    )
+    application = FastAPI(
+        title=cfg.PROJECT_NAME if hasattr(cfg, "PROJECT_NAME") else settings.PROJECT_NAME,
+        description="API do ProjetoVturb desenvolvida com FastAPI e PostgreSQL",
+        version="0.1.0",
+        lifespan=lifespan,
+        **docs_kwargs,
     )
 
-# CORS setup
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    # Exception Handler Global (regra obrigatória)
+    @application.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        logger.error(f"Erro inesperado em {request.method} {request.url.path}: {exc}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Erro interno do servidor. Tente novamente mais tarde."}
+        )
 
-# Static files directory
-static_dir = Path(__file__).resolve().parent.parent / "static"
-static_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    # CORS: autenticação é por header Bearer (não cookie), então sem credentials.
+    # O painel e o embed rodam no mesmo domínio do frontend; em dev, sem lista = qualquer origem.
+    origins = list(cfg.CORS_ORIGINS or []) or (["*"] if not is_production else [])
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-app.include_router(health_router)
-app.include_router(auth_router)
-app.include_router(videos_router)
-app.include_router(users_router)
-app.include_router(backups_router, prefix="/backups", tags=["Backups"])
+    # Static files directory
+    static_dir = Path(__file__).resolve().parent.parent / "static"
+    static_dir.mkdir(parents=True, exist_ok=True)
+    application.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-@app.get("/")
-def root():
-    return {
-        "message": f"Bem-vindo à API do {settings.PROJECT_NAME}",
-        "docs": "/docs",
-        "health": "/health/"
-    }
+    application.include_router(health_router)
+    application.include_router(auth_router)
+    application.include_router(videos_router)
+    application.include_router(users_router)
+    application.include_router(backups_router, prefix="/backups", tags=["Backups"])
+
+    @application.get("/")
+    def root():
+        body = {
+            "message": f"Bem-vindo à API do {settings.PROJECT_NAME}",
+            "health": "/health/",
+        }
+        if not is_production:
+            body["docs"] = "/docs"
+        return body
+
+    return application
+
+
+app = create_app()
 
 if __name__ == "__main__":
     import uvicorn

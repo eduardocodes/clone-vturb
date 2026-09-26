@@ -27,8 +27,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Cópia do código-fonte do backend
 COPY backend/ .
 
-# Criação de diretório persistente para uploads estáticos caso não use S3/B2
-RUN mkdir -p /app/static/uploads
+# Diretórios graváveis (uploads locais sem S3 e backups locais) e usuário sem privilégios
+RUN mkdir -p /app/static/uploads /app/backups \
+    && useradd --system --uid 10001 --home-dir /app --shell /usr/sbin/nologin vturb \
+    && chown -R vturb:vturb /app/static /app/backups
+USER vturb
+
+# Só confia em X-Forwarded-* vindos de redes privadas (proxy da Coolify/Traefik)
+ENV FORWARDED_ALLOW_IPS="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1"
 
 # Porta padrão de escuta da API
 EXPOSE 8000
@@ -38,4 +44,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health/ || exit 1
 
 # Migrations e Super Admin rodam uma vez (app/bootstrap.py); depois sobem os workers Uvicorn
-CMD ["sh", "-c", "python -m app.bootstrap && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips '*'"]
+CMD ["sh", "-c", "python -m app.bootstrap && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers"]

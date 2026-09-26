@@ -10,17 +10,27 @@ from app.models.user import User
 security_scheme = HTTPBearer(auto_error=False)
 
 def get_current_user(
+    auth_header: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: Session = Depends(get_db)
+) -> User:
+    """Valida o token JWT do header Authorization e injeta o usuário autenticado."""
+    raw_token = auth_header.credentials if auth_header and auth_header.credentials else None
+    return _user_from_token(raw_token, db)
+
+
+def get_current_user_allow_query_token(
     request: Request,
     auth_header: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     db: Session = Depends(get_db)
 ) -> User:
-    """Valida o token JWT (via header Authorization ou query parameter ?token=) e injeta o usuário autenticado na requisição."""
-    raw_token: Optional[str] = None
-    if auth_header and auth_header.credentials:
-        raw_token = auth_header.credentials
-    elif request is not None and request.query_params.get("token"):
+    """Como get_current_user, mas aceita ?token= (só para links de download abertos pelo navegador)."""
+    raw_token = auth_header.credentials if auth_header and auth_header.credentials else None
+    if not raw_token:
         raw_token = request.query_params.get("token")
+    return _user_from_token(raw_token, db)
 
+
+def _user_from_token(raw_token: Optional[str], db: Session) -> User:
     if not raw_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

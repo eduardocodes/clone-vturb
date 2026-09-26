@@ -90,7 +90,12 @@ def test_docker_compose_production_structure():
         assert list(compose_data["networks"].keys()) == ["network_swarm_public"]
         assert compose_data["networks"]["network_swarm_public"].get("external") is True
 
-        # Valida que environment do frontend contém as mesmas variáveis do backend
-        backend_env_keys = [e.split("=")[0] if isinstance(e, str) else e for e in backend["environment"]]
+        # O frontend recebe só a URL da API: nenhum segredo do backend vaza para ele
+        backend_env = dict(e.split("=", 1) for e in backend["environment"])
         frontend_env_keys = [e.split("=")[0] if isinstance(e, str) else e for e in frontend["environment"]]
-        assert set(backend_env_keys) == set(frontend_env_keys)
+        assert set(frontend_env_keys) == {"VITE_API_BASE_URL"}
+
+        # Backend sobe em modo produção, sem segredo com valor padrão
+        assert backend_env["ENVIRONMENT"] == "production"
+        for key in ("JWT_SECRET_KEY", "SUPER_ADMIN_PASSWORD", "CORS_ORIGINS"):
+            assert ":-" not in backend_env[key], f"{key} não pode ter valor padrão"

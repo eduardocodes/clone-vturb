@@ -22,7 +22,7 @@ from app.schemas.backup import (
 )
 from app.services.backup_manager import BackupManager
 from app.services.backblaze import backblaze_backup_service
-from app.api.users import require_super_admin
+from app.api.users import require_super_admin, require_super_admin_allow_query_token
 
 logger = logging.getLogger("projetovturb")
 
@@ -115,7 +115,7 @@ def create_manual_backup(
         logger.error(f"Falha ao criar backup manual: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao gerar backup: {str(e)}"
+            detail="Erro ao gerar backup. Consulte os logs do servidor."
         )
 
 @router.get("/schedule", response_model=BackupScheduleResponse)
@@ -173,7 +173,7 @@ def update_backup_schedule(
 def download_backup(
     backup_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_super_admin),
+    current_user: User = Depends(require_super_admin_allow_query_token),
 ):
     """Baixa o arquivo compactado de dump (.dump.gz)."""
     record = db.query(BackupRecord).filter(BackupRecord.id == backup_id).first()
@@ -212,7 +212,7 @@ def restore_backup(
         return {"detail": f"Banco de dados restaurado com sucesso a partir de {record.filename}."}
     except Exception as e:
         logger.error(f"Falha na restauração do backup {backup_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro na restauração: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro na restauração. Consulte os logs do servidor.")
 
 @router.delete("/{backup_id}")
 def delete_backup(
@@ -294,4 +294,4 @@ async def upload_external_backup(
         return record
     except Exception as e:
         logger.error(f"Erro ao processar upload externo de backup: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao importar backup: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro ao importar backup. Consulte os logs do servidor.")

@@ -22,6 +22,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
 )
 from app.api.deps import get_current_user
+from app.core.rate_limit import rate_limit
 from app.services.brevo import send_verification_code_email
 
 logger = logging.getLogger("projetovturb.auth")
@@ -66,7 +67,7 @@ def resolve_display_name(user: User, is_super_admin: bool) -> str:
     parts = [w.capitalize() for w in cleaned.split()]
     return " ".join(parts) or "Usuário"
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, dependencies=[Depends(rate_limit("login", 10))])
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     """Autentica o usuário pelo e-mail e senha com hash Argon2id e gera JWT de 24h."""
     email_clean = payload.email.strip().lower()
@@ -127,7 +128,7 @@ def get_me(current_user: User = Depends(get_current_user)):
     resp.name = resolve_display_name(current_user, current_user.is_super_admin)
     return resp
 
-@router.get("/invite/{token}", response_model=InviteValidateResponse)
+@router.get("/invite/{token}", response_model=InviteValidateResponse, dependencies=[Depends(rate_limit("invite", 30))])
 def validate_invite(token: str, db: Session = Depends(get_db)):
     """Valida publicamente se o link de convite é válido e não expirou."""
     invite = db.query(UserInvite).filter(UserInvite.token == token.strip()).first()
@@ -156,7 +157,7 @@ def validate_invite(token: str, db: Session = Depends(get_db)):
         expires_at=invite.expires_at
     )
 
-@router.post("/send-verification-code", response_model=SendVerificationCodeResponse)
+@router.post("/send-verification-code", response_model=SendVerificationCodeResponse, dependencies=[Depends(rate_limit("send-code", 5))])
 def send_verification_code(payload: SendVerificationCodeRequest, db: Session = Depends(get_db)):
     """Gera e envia código de 6 dígitos para o e-mail via Brevo para ativação de conta."""
     token_clean = payload.token.strip()
@@ -218,7 +219,7 @@ def send_verification_code(payload: SendVerificationCodeRequest, db: Session = D
         message=f"Código de verificação enviado para {email_clean}."
     )
 
-@router.post("/register-invite", response_model=TokenResponse)
+@router.post("/register-invite", response_model=TokenResponse, dependencies=[Depends(rate_limit("register", 10))])
 def register_via_invite(payload: RegisterInviteRequest, db: Session = Depends(get_db)):
     """Cadastra um novo usuário via link de convite com validação rigorosa de código Brevo e senha forte."""
     token_clean = payload.token.strip()
@@ -328,7 +329,7 @@ def register_via_invite(payload: RegisterInviteRequest, db: Session = Depends(ge
         user=UserResponse.model_validate(new_user)
     )
 
-@router.get("/validate-reset-token", response_model=ValidateResetTokenResponse)
+@router.get("/validate-reset-token", response_model=ValidateResetTokenResponse, dependencies=[Depends(rate_limit("validate-reset", 30))])
 def validate_reset_token(token: str, db: Session = Depends(get_db)):
     """Valida se um token de redefinição de senha existe, é válido e não expirou."""
     now = datetime.now(timezone.utc)
@@ -357,7 +358,7 @@ def validate_reset_token(token: str, db: Session = Depends(get_db)):
         name=user.name
     )
 
-@router.post("/reset-password")
+@router.post("/reset-password", dependencies=[Depends(rate_limit("reset-password", 10))])
 def execute_password_reset(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
     """Aplica a nova senha informada pelo usuário através de um token de redefinição válido."""
     now = datetime.now(timezone.utc)

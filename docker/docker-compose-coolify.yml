@@ -3,8 +3,9 @@
 #
 # - Domínios: defina na Coolify o domínio do serviço "frontend" (painel) e do
 #   "backend" (API). As variáveis SERVICE_FQDN_* abaixo são preenchidas por ela.
-# - Segredos: SERVICE_PASSWORD_* são gerados pela Coolify. SUPER_ADMIN_EMAIL e
-#   SUPER_ADMIN_PASSWORD precisam ser definidos na aba de variáveis (sem padrão).
+# - Segredos: SERVICE_PASSWORD_* são gerados pela Coolify. SUPER_ADMIN_EMAIL,
+#   SUPER_ADMIN_PASSWORD e CORS_ORIGINS precisam ser definidos na aba de variáveis
+#   (sem padrão). Com ENVIRONMENT=production o backend se recusa a subir sem eles.
 # - Postgres 17 para casar com o pg_dump 17 da imagem do backend (backups).
 # - Vídeo nunca passa por aqui: o navegador envia e baixa direto do storage S3/R2.
 # ==============================================================================
@@ -37,6 +38,9 @@ services:
     restart: unless-stopped
     environment:
       SERVICE_FQDN_BACKEND_8000: ${SERVICE_FQDN_BACKEND_8000}
+      ENVIRONMENT: production
+      # Domínio do painel (ex.: https://painel.seudominio.com). Sem isso o backend não sobe.
+      CORS_ORIGINS: ${CORS_ORIGINS}
       DATABASE_URL: postgresql://vturb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/vturb
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD}

@@ -16,6 +16,7 @@ from app.core.database import get_db
 from app.models.video import Video, VideoAnalytics
 from app.models.user import User
 from app.api.deps import get_current_user
+from app.core.rate_limit import rate_limit
 from app.services.storage import storage_service
 from app.schemas.video import (
     VideoCreate,
@@ -109,22 +110,29 @@ def create_video(
     return video
 
 
+# Extensão aceita -> prefixo de MIME esperado. SVG fica fora: pode carregar script (XSS).
+UPLOAD_EXTENSIONS = {
+    ".mp4": "video/", ".webm": "video/", ".mov": "video/", ".m4v": "video/",
+    ".png": "image/", ".jpg": "image/", ".jpeg": "image/", ".webp": "image/", ".gif": "image/",
+}
+
+
 @router.post("/upload")
 def upload_video_file(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ):
-    allowed_extensions = {
-        # Vídeos
-        ".mp4", ".webm", ".mov", ".m4v",
-        # Imagens para capas/thumbnails
-        ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"
-    }
-    ext = Path(file.filename).suffix.lower()
-    if ext not in allowed_extensions:
+    ext = Path(file.filename or "").suffix.lower()
+    expected_mime_prefix = UPLOAD_EXTENSIONS.get(ext)
+    if expected_mime_prefix is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Formato de arquivo não suportado: {ext}. Utilize MP4, WebM, MOV, PNG ou JPG."
+        )
+    if not (file.content_type or "").lower().startswith(expected_mime_prefix):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tipo do arquivo não corresponde à extensão."
         )
 
     file_url = storage_service.upload_file(
@@ -211,7 +219,11 @@ def delete_video(
     return None
 
 
-@router.post("/{video_id}/events", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{video_id}/events",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("events", 120))],
+)
 def track_event(video_id: str, event: AnalyticsEventCreate, db: Session = Depends(get_db)):
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:

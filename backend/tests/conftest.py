@@ -14,6 +14,8 @@ TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL") or derive_test_database_url(
     os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
 )
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# Rate limit fica desligado na suíte; os testes de segurança ligam explicitamente
+os.environ["RATE_LIMIT_ENABLED"] = "false"
 
 recreate_database(TEST_DATABASE_URL)
 

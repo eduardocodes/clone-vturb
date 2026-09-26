@@ -95,13 +95,22 @@ Documento de referência para decisões de arquitetura e produto do ProjetoVturb
 ## 7. Autenticação, Super Admin e Segurança de Acesso
 - [x] **Conta Super Admin Automática via Variáveis de Ambiente**:
   - As credenciais do administrador mestre são parametrizadas no `.env` (`SUPER_ADMIN_EMAIL` e `SUPER_ADMIN_PASSWORD`).
-  - Durante o boot do backend (lifespan), o sistema verifica e cria a conta no banco de dados se não existir, ou sincroniza a senha caso a variável seja alterada.
+  - No boot do container (`python -m app.bootstrap`, uma vez antes dos workers do uvicorn), o sistema verifica e cria a conta no banco de dados se não existir, ou sincroniza a senha caso a variável seja alterada.
   - Não pode haver mais de um Super Admin. Apenas administradores comuns (`admin`) e usuários (`user`) podem ser criados.
 - [x] **Criptografia Memory-Hard contra Força Bruta (Argon2id)**:
   - Todas as senhas de usuários são criptografadas com o algoritmo vencedor do Password Hashing Competition: **Argon2id** (via `argon2-cffi`).
   - Parâmetros de proteção estritos: custo de memória de 64 MB (`memory_cost=65536`), 3 iterações (`time_cost=3`) e 4 threads de paralelismo (`parallelism=4`).
 - [x] **Proteção de Rotas com Tokens JWT**:
   - Todos os endpoints administrativos do dashboard exigem cabeçalho `Authorization: Bearer <token>`. Duração padrão de 24 horas (`JWT_ACCESS_TOKEN_EXPIRE_HOURS=24h`).
+- [x] **Travas de Produção (`ENVIRONMENT=production`)**:
+  - O backend se recusa a subir se `JWT_SECRET_KEY` estiver no valor padrão ou tiver menos de 32 caracteres, se `SUPER_ADMIN_PASSWORD` estiver vazia ou no padrão, ou se `CORS_ORIGINS` não listar o domínio do painel.
+  - `/docs`, `/redoc` e `/openapi.json` ficam desligados.
+  - CORS libera só as origens de `CORS_ORIGINS`, sem credentials (a autenticação é por header, não por cookie).
+  - Token via `?token=` só é aceito no download de backup (link aberto pelo navegador); nas demais rotas, só o header.
+  - Rate limit por IP (`CF-Connecting-IP`): login 10/min, envio de código 5/min, cadastro por convite e redefinição de senha 10/min, eventos do player 120/min. Contador em memória por worker (limite aproximado).
+  - Upload aceita só vídeo (MP4, WebM, MOV, M4V) e imagem (PNG, JPG, WebP, GIF) com MIME coerente com a extensão; SVG é recusado (risco de XSS).
+  - Erros internos de backup não são devolvidos ao cliente, só ao log.
+  - O container de produção roda com usuário sem privilégios e só confia em `X-Forwarded-*` vindos de redes privadas.
 - [x] **Interface de Login e Topbar**:
   - Layout dividido em 2 colunas: formulário à esquerda e showcase à direita.
   - Topbar inclui o e-mail do usuário logado, badge de perfil e botão "Sair".

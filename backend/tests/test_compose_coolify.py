@@ -66,3 +66,9 @@ def test_segredos_sem_valor_padrao(compose):
             value = str(compose["services"]["postgres"]["environment"].get(key, ""))
         assert value.startswith("${"), f"{key} deve vir do ambiente da Coolify"
         assert ":-" not in value, f"{key} não pode ter valor padrão"
+
+
+def test_backend_em_modo_producao_com_cors_definido(compose):
+    env = compose["services"]["backend"]["environment"]
+    assert env["ENVIRONMENT"] == "production"
+    assert str(env["CORS_ORIGINS"]).startswith("${")
