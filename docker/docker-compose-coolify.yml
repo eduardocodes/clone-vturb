@@ -1,0 +1,79 @@
+# ==============================================================================
+# Deploy na Coolify (recurso "Docker Compose" apontando para este arquivo).
+#
+# - Domínios: defina na Coolify o domínio do serviço "frontend" (painel) e do
+#   "backend" (API). As variáveis SERVICE_FQDN_* abaixo são preenchidas por ela.
+# - Segredos: SERVICE_PASSWORD_* são gerados pela Coolify. SUPER_ADMIN_EMAIL e
+#   SUPER_ADMIN_PASSWORD precisam ser definidos na aba de variáveis (sem padrão).
+# - Postgres 17 para casar com o pg_dump 17 da imagem do backend (backups).
+# - Vídeo nunca passa por aqui: o navegador envia e baixa direto do storage S3/R2.
+# ==============================================================================
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vturb
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      POSTGRES_DB: vturb
+    volumes:
+      - vturb_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vturb -d vturb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile.prod
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_BACKEND_8000: ${SERVICE_FQDN_BACKEND_8000}
+      DATABASE_URL: postgresql://vturb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/vturb
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD}
+      JWT_SECRET_KEY: ${SERVICE_PASSWORD_64_JWT}
+      JWT_ACCESS_TOKEN_EXPIRE_HOURS: ${JWT_ACCESS_TOKEN_EXPIRE_HOURS:-24}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
+      BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-Smart VSL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 768M
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile.prod
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ${SERVICE_FQDN_BACKEND}
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+volumes:
+  vturb_postgres_data:
