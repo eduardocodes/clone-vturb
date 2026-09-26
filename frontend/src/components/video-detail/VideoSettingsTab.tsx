@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { Save, Film, Palette, MousePointerClick, RefreshCw } from 'lucide-react'
 import type { Video } from '../../types/video'
-import { updateVideo, uploadFile } from '../../services/api'
+import { updateVideo } from '../../services/api'
+import { uploadMedia, type UploadResult } from '../../services/directUpload'
 import { MediaSettingsSection, PlayerCustomizationSection, CtaSettingsSection } from './settings'
 
 interface VideoSettingsTabProps {
@@ -40,13 +41,15 @@ export const VideoSettingsTab: React.FC<VideoSettingsTabProps> = ({ video, onSav
   const [saving, setSaving] = useState(false)
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [uploadingThumb, setUploadingThumb] = useState(false)
+  const [uploadedVideo, setUploadedVideo] = useState<UploadResult | null>(null)
 
   const handleVideoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     try {
       setUploadingVideo(true)
-      const res = await uploadFile(file)
+      const res = await uploadMedia(file, 'video')
+      setUploadedVideo(res)
       setVideoUrl(res.url)
       showToast('Novo vídeo carregado com sucesso!')
     } catch {
@@ -61,7 +64,7 @@ export const VideoSettingsTab: React.FC<VideoSettingsTabProps> = ({ video, onSav
     if (!file) return
     try {
       setUploadingThumb(true)
-      const res = await uploadFile(file)
+      const res = await uploadMedia(file, 'thumbnail')
       setThumbnailUrl(res.url)
       showToast('Nova capa carregada com sucesso!')
     } catch {
@@ -79,6 +82,9 @@ export const VideoSettingsTab: React.FC<VideoSettingsTabProps> = ({ video, onSav
         title,
         video_url: videoUrl,
         thumbnail_url: thumbnailUrl || undefined,
+        ...(uploadedVideo?.storageKey && uploadedVideo.url === videoUrl
+          ? { storage_key: uploadedVideo.storageKey, source_size_bytes: uploadedVideo.sizeBytes }
+          : {}),
         player_settings: {
           primary_color: primaryColor,
           autoplay,

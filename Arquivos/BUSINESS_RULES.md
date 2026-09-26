@@ -8,7 +8,13 @@ Documento de referência para decisões de arquitetura e produto do ProjetoVturb
 - [x] Cada vídeo cadastrado possui título, URL do vídeo, capa e opções visuais.
 - [x] O upload inicial de vídeo aceita tanto arquivos locais (armazenados em static/uploads) quanto URLs diretas de CDN/S3/HLS, bem como upload de imagens para capas de thumbnail.
 - [x] A criação/upload de novos vídeos é realizada em uma visualização de tela cheia dedicada (`VideoCreateView`) com a mesma identidade visual e estrutura de cabeçalho do editor de vídeos (`VideoDetailView`), substituindo popups ou modais antigos. Ao confirmar a criação com sucesso, a interface transiciona diretamente para o painel de edição do vídeo criado.
-- [ ] [NOVO] Quais são as credenciais do Backblaze B2 (Key ID, Application Key, Bucket Name, Endpoint URL) ou se utilizaremos Cloudflare CDN como proxy de banda gratuita?
+- [x] **Upload direto para o storage (S3 compatível: Cloudflare R2, Backblaze B2)**:
+  - Com storage configurado (`STORAGE_*`, ou as antigas `BACKBLAZE_*`), o navegador envia o arquivo direto para o bucket com URLs assinadas pelo backend. O arquivo nunca passa pelo backend nem pelo proxy/tunnel (sem estouro de memória nem limite de 100 MB por requisição da Cloudflare).
+  - Vídeo: multipart em partes de 16 MB (4 em paralelo, 3 tentativas por parte, progresso real). Capa: PUT único. Limites: vídeo até `MAX_VIDEO_BYTES` (4 GB), imagem até `MAX_IMAGE_BYTES` (10 MB).
+  - Chaves: `videos/<uuid>/source.<ext>` e `thumbs/<uuid>.<ext>`. O vídeo guarda `storage_key`; a URL pública é derivada dela no servidor (`STORAGE_PUBLIC_URL`, domínio próprio do bucket servido pela CDN).
+  - Excluir um vídeo (simples ou em massa) ou trocar o arquivo apaga a pasta `videos/<uuid>/` e a capa do storage. Falha no storage só vira log; a exclusão no banco não é bloqueada.
+  - Sem storage configurado, o envio antigo pelo backend continua funcionando em dev (grava em `static/uploads`). Em produção é recusado (503) em vez de cair calado no disco.
+  - Configuração do bucket (R2): CORS com `AllowedOrigins`=[domínio do painel], `AllowedMethods`=[PUT, GET, HEAD], `ExposeHeaders`=[ETag] (sem o ETag o multipart falha); regra de lifecycle abortando multipart incompleto após 1 dia; domínio próprio (ex.: `video.seudominio.com`) com Cache Rule "Cache Everything".
 
 ---
 

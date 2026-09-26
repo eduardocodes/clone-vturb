@@ -27,6 +27,14 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://vturb_user:vturb_password@postgres:5432/vturb_db
+      # Storage S3 local (SeaweedFS). O navegador usa localhost:8333; o backend, a rede do Docker.
+      STORAGE_ENDPOINT_URL: http://seaweedfs:8333
+      STORAGE_PRESIGN_ENDPOINT_URL: http://localhost:8333
+      STORAGE_ACCESS_KEY_ID: vturbdev
+      STORAGE_SECRET_ACCESS_KEY: vturbdevsecret
+      STORAGE_BUCKET: vturb-dev
+      STORAGE_PUBLIC_URL: http://localhost:8333/vturb-dev
+      STORAGE_REGION: us-east-1
     ports:
       - "8003:8000"
     volumes:

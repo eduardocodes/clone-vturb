@@ -106,6 +106,8 @@ export interface Video {
   duration: number
   plays_count?: number
   player_settings: PlayerSettings
+  /** Processamento da mídia no servidor (HLS) */
+  status?: 'ready' | 'processing' | 'failed'
   created_at: string
   updated_at: string
 }

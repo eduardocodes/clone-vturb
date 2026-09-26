@@ -60,8 +60,12 @@ def test_banco_novo_recebe_todas_as_tabelas_e_fica_no_head(scratch_db):
 
 def test_instalacao_antiga_sem_alembic_e_carimbada_e_preserva_dados(scratch_db):
     url, engine = scratch_db
-    # Simula uma instalação feita antes do Alembic: tabelas criadas por create_all
-    Base.metadata.create_all(bind=engine)
+    # Simula uma instalação feita antes do Alembic: schema da baseline, sem alembic_version
+    from alembic import command
+
+    command.upgrade(alembic_config(url), BASELINE_REVISION)
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE alembic_version"))
     with engine.begin() as conn:
         conn.execute(
             text("INSERT INTO videos (id, title, video_url, duration) VALUES ('v-legado', 'Legado', 'https://x/v.mp4', 10)")

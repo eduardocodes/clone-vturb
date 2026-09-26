@@ -16,6 +16,12 @@ TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL") or derive_test_database_url(
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # Rate limit fica desligado na suíte; os testes de segurança ligam explicitamente
 os.environ["RATE_LIMIT_ENABLED"] = "false"
+# Storage real nunca é usado na suíte (os testes injetam mocks); zera o que vier do compose
+for _var in (
+    "STORAGE_ENDPOINT_URL", "STORAGE_PRESIGN_ENDPOINT_URL", "STORAGE_ACCESS_KEY_ID",
+    "STORAGE_SECRET_ACCESS_KEY", "STORAGE_BUCKET", "STORAGE_PUBLIC_URL",
+):
+    os.environ[_var] = ""
 
 recreate_database(TEST_DATABASE_URL)
 

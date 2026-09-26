@@ -32,7 +32,7 @@ export function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
-function handleAuthResponse(res: Response): void {
+export function handleAuthResponse(res: Response): void {
   if (res.status === 401) {
     removeAuthToken()
     if (typeof window !== 'undefined') {
@@ -93,6 +93,9 @@ export async function createVideo(data: {
   thumbnail_url?: string
   duration?: number
   player_settings?: Partial<PlayerSettings>
+  /** Chave do upload direto; com ela o backend deriva a URL pública do vídeo */
+  storage_key?: string
+  source_size_bytes?: number
 }): Promise<Video> {
   const res = await fetch(`${API_BASE}/videos/`, {
     method: 'POST',
@@ -114,6 +117,8 @@ export async function updateVideo(
     video_url?: string
     thumbnail_url?: string
     player_settings?: Partial<PlayerSettings>
+    storage_key?: string
+    source_size_bytes?: number
   }
 ): Promise<Video> {
   const res = await fetch(`${API_BASE}/videos/${id}`, {

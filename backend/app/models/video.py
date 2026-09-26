@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Float, Integer, DateTime, ForeignKey, JSON
+from sqlalchemy import BigInteger, Column, String, Float, Integer, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -33,6 +33,13 @@ class Video(Base):
     })
     created_at = Column(DateTime(timezone=True), default=get_utc_now)
     updated_at = Column(DateTime(timezone=True), default=get_utc_now, onupdate=get_utc_now)
+
+    # --- Mídia no storage (contexto de Mídia; não expor no endpoint público) ---
+    # Chave do arquivo original no storage (ex.: videos/<uuid>/source.mp4). Nula para URL externa.
+    storage_key = Column(String(512), nullable=True)
+    source_size_bytes = Column(BigInteger, nullable=True)
+    # ready | processing | failed (processamento de HLS)
+    status = Column(String(20), nullable=False, default="ready", server_default="ready")
 
     analytics = relationship("VideoAnalytics", back_populates="video", cascade="all, delete-orphan")
 

@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { Loader2, AlertCircle, Play } from 'lucide-react'
 import type { Video } from '../../types/video'
-import { createVideo, uploadFile } from '../../services/api'
+import { createVideo } from '../../services/api'
+import { uploadMedia, type UploadResult } from '../../services/directUpload'
 import { VideoCreateHeader } from './VideoCreateHeader'
 import { VideoSourceSection } from './VideoSourceSection'
 import { ThumbnailSourceSection } from './ThumbnailSourceSection'
@@ -24,6 +25,8 @@ export const VideoCreateView: React.FC<VideoCreateViewProps> = ({
   const [videoFileName, setVideoFileName] = useState<string | null>(null)
   const [videoUploading, setVideoUploading] = useState(false)
   const [videoProgress, setVideoProgress] = useState(0)
+  // Resultado do upload direto: a chave só vale enquanto a URL do formulário for a dele
+  const [uploadedVideo, setUploadedVideo] = useState<UploadResult | null>(null)
 
   const [thumbMode, setThumbMode] = useState<'upload' | 'url'>('upload')
   const [thumbnailUrl, setThumbnailUrl] = useState('')
@@ -52,23 +55,18 @@ export const VideoCreateView: React.FC<VideoCreateViewProps> = ({
   const handleVideoUpload = async (file: File) => {
     try {
       setVideoUploading(true)
-      setVideoProgress(20)
+      setVideoProgress(0)
       setError(null)
       autoFillTitleFromFile(file.name)
 
-      // Simulação suave de progresso visual
-      const interval = setInterval(() => {
-        setVideoProgress((prev) => (prev < 90 ? prev + 15 : prev))
-      }, 200)
-
-      const res = await uploadFile(file)
-      clearInterval(interval)
-      setVideoProgress(100)
+      const res = await uploadMedia(file, 'video', { onProgress: setVideoProgress })
+      setUploadedVideo(res)
       setVideoUrl(res.url)
       setVideoFileName(file.name)
       showToast('Arquivo de vídeo carregado com sucesso!')
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer upload do vídeo.')
+      setUploadedVideo(null)
       setVideoUrl('')
       setVideoFileName(null)
     } finally {
@@ -80,7 +78,7 @@ export const VideoCreateView: React.FC<VideoCreateViewProps> = ({
     try {
       setThumbUploading(true)
       setError(null)
-      const res = await uploadFile(file)
+      const res = await uploadMedia(file, 'thumbnail')
       setThumbnailUrl(res.url)
       setThumbFileName(file.name)
       showToast('Capa enviada com sucesso!')
@@ -109,6 +107,9 @@ export const VideoCreateView: React.FC<VideoCreateViewProps> = ({
         title: title.trim(),
         video_url: videoUrl.trim(),
         thumbnail_url: thumbnailUrl.trim() || undefined,
+        ...(uploadedVideo?.storageKey && uploadedVideo.url === videoUrl.trim()
+          ? { storage_key: uploadedVideo.storageKey, source_size_bytes: uploadedVideo.sizeBytes }
+          : {}),
         player_settings: {
           primary_color: primaryColor,
           autoplay,

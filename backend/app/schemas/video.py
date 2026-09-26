@@ -97,18 +97,27 @@ class PlayerSettings(BaseModel):
 
 
 
+# Chave gerada por /uploads/init para o arquivo original do vídeo
+STORAGE_KEY_PATTERN = r"^videos/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/source\.(mp4|webm|mov|m4v)$"
+
+
 class VideoCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
+    # Com storage_key, a URL é derivada da chave no servidor e este valor é ignorado
     video_url: str = Field(..., min_length=1, max_length=1024)
     thumbnail_url: Optional[str] = Field(None, max_length=1024)
     duration: Optional[float] = 0.0
     player_settings: Optional[PlayerSettings] = None
+    storage_key: Optional[str] = Field(None, pattern=STORAGE_KEY_PATTERN)
+    source_size_bytes: Optional[int] = Field(None, ge=0)
 
 class VideoUpdate(BaseModel):
     title: Optional[str] = None
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
     player_settings: Optional[PlayerSettings] = None
+    storage_key: Optional[str] = Field(None, pattern=STORAGE_KEY_PATTERN)
+    source_size_bytes: Optional[int] = Field(None, ge=0)
 
 class VideoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -120,6 +129,7 @@ class VideoResponse(BaseModel):
     duration: float
     plays_count: Optional[int] = 0
     player_settings: Dict[str, Any]
+    status: str = "ready"
     created_at: datetime
     updated_at: datetime
 

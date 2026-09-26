@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import uuid
@@ -17,7 +18,7 @@ from app.models.video import Video, VideoAnalytics
 from app.models.user import User
 from app.api.deps import get_current_user
 from app.core.rate_limit import rate_limit
-from app.services.storage import storage_service
+from app.services.storage import StorageNotConfigured, storage_service
 from app.schemas.video import (
     VideoCreate,
     VideoUpdate,
@@ -31,6 +32,27 @@ from app.schemas.video import (
 )
 
 router = APIRouter(prefix="/videos", tags=["Videos"])
+logger = logging.getLogger("projetovturb.videos")
+
+
+def _video_folder(storage_key: str) -> str:
+    """videos/<uuid>/source.mp4 -> videos/<uuid>/ (pasta com o original e, depois, o HLS)."""
+    return storage_key.rsplit("/", 1)[0] + "/"
+
+
+def cleanup_storage(storage_key: Optional[str] = None, thumbnail_url: Optional[str] = None) -> None:
+    """Apaga do storage os arquivos de um vídeo. Melhor esforço: falha só vira log."""
+    if storage_key:
+        try:
+            storage_service.delete_prefix(_video_folder(storage_key))
+        except Exception as exc:
+            logger.error(f"Falha ao apagar {storage_key} do storage: {exc}")
+    thumb_key = storage_service.key_from_public_url(thumbnail_url) if thumbnail_url else None
+    if thumb_key and thumb_key.startswith("thumbs/"):
+        try:
+            storage_service.delete_object(thumb_key)
+        except Exception as exc:
+            logger.error(f"Falha ao apagar a capa {thumb_key} do storage: {exc}")
 
 
 def get_plays_count_map(db: Session) -> dict:
@@ -75,6 +97,7 @@ def list_videos(
             duration=v.duration or 0.0,
             plays_count=plays_map.get(v.id, 0),
             player_settings=v.player_settings or {},
+            status=v.status or "ready",
             created_at=v.created_at,
             updated_at=v.updated_at,
         )
@@ -90,7 +113,9 @@ def create_video(
 ):
     video = Video(
         title=payload.title,
-        video_url=payload.video_url,
+        video_url=storage_service.public_url(payload.storage_key) if payload.storage_key else payload.video_url,
+        storage_key=payload.storage_key,
+        source_size_bytes=payload.source_size_bytes if payload.storage_key else None,
         thumbnail_url=payload.thumbnail_url,
         duration=payload.duration or 0.0,
         player_settings=payload.player_settings.model_dump() if payload.player_settings else {
@@ -135,11 +160,17 @@ def upload_video_file(
             detail="Tipo do arquivo não corresponde à extensão."
         )
 
-    file_url = storage_service.upload_file(
-        file_obj=file.file,
-        original_filename=file.filename,
-        content_type=file.content_type
-    )
+    try:
+        file_url = storage_service.upload_file(
+            file_obj=file.file,
+            original_filename=file.filename,
+            content_type=file.content_type
+        )
+    except StorageNotConfigured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Upload indisponível: storage não configurado."
+        )
 
     return {
         "filename": file.filename,
@@ -158,10 +189,14 @@ def bulk_delete_videos(
 
     videos = db.query(Video).filter(Video.id.in_(payload.video_ids)).all()
     deleted_ids = [v.id for v in videos]
+    media = [(v.storage_key, v.thumbnail_url) for v in videos]
 
     for video in videos:
         db.delete(video)
     db.commit()
+
+    for storage_key, thumbnail_url in media:
+        cleanup_storage(storage_key, thumbnail_url)
 
     return BulkDeleteResponse(
         deleted_count=len(deleted_ids),
@@ -189,17 +224,33 @@ def update_video(
     if not video:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vídeo não encontrado.")
 
+    stale_key: Optional[str] = None
+    stale_thumbnail: Optional[str] = None
+
     if payload.title is not None:
         video.title = payload.title
-    if payload.video_url is not None:
+    if payload.storage_key is not None:
+        if video.storage_key and video.storage_key != payload.storage_key:
+            stale_key = video.storage_key
+        video.storage_key = payload.storage_key
+        video.source_size_bytes = payload.source_size_bytes
+        video.video_url = storage_service.public_url(payload.storage_key)
+    elif payload.video_url is not None and payload.video_url != video.video_url:
+        # Trocou por uma URL externa: o arquivo antigo do storage fica órfão
+        stale_key = video.storage_key
+        video.storage_key = None
+        video.source_size_bytes = None
         video.video_url = payload.video_url
-    if payload.thumbnail_url is not None:
+    if payload.thumbnail_url is not None and payload.thumbnail_url != video.thumbnail_url:
+        stale_thumbnail = video.thumbnail_url
         video.thumbnail_url = payload.thumbnail_url
     if payload.player_settings is not None:
         video.player_settings = payload.player_settings.model_dump()
 
     db.commit()
     db.refresh(video)
+    if stale_key or stale_thumbnail:
+        cleanup_storage(stale_key, stale_thumbnail)
     video.plays_count = get_single_plays_count(db, video.id)
     return video
 
@@ -214,8 +265,10 @@ def delete_video(
     if not video:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vídeo não encontrado.")
 
+    storage_key, thumbnail_url = video.storage_key, video.thumbnail_url
     db.delete(video)
     db.commit()
+    cleanup_storage(storage_key, thumbnail_url)
     return None
 
 
