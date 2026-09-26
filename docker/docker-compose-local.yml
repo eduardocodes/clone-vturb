@@ -31,6 +31,8 @@ services:
       - "8003:8000"
     volumes:
       - ../backend:/app
+      # Composes de deploy visíveis para os testes de configuração
+      - ../docker:/docker:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,6 +51,33 @@ services:
     depends_on:
       - backend
 
+  # Storage S3 local (faz o papel do Cloudflare R2 / Backblaze B2 em dev).
+  # API S3 em http://localhost:8333, bucket "vturb-dev", leitura anônima liberada.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.47
+    container_name: seaweedfs
+    restart: unless-stopped
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports:
+      - "8333:8333"
+    volumes:
+      - seaweedfs_data:/data
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:4.47
+    container_name: seaweedfs-init
+    restart: "no"
+    depends_on:
+      - seaweedfs
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        until echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 >/dev/null 2>&1; do sleep 2; done
+        echo "s3.bucket.create -name vturb-dev" | weed shell -master=seaweedfs:9333 || true
+
 volumes:
   postgres_data:
     name: projetovturb_postgres_data
+  seaweedfs_data:
+    name: projetovturb_seaweedfs_data

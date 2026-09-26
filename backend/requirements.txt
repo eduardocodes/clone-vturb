@@ -1,28 +1,29 @@
+# Dependencias de runtime do backend, com versoes fixas para builds reproduziveis.
+# Atualize de forma deliberada (e rode a suite de testes) antes de subir versao.
+
 # Framework web moderno e assíncrono para construção de APIs
-fastapi>=0.110.0
+fastapi==0.141.1
 # Servidor ASGI de alta performance para execução do FastAPI
-uvicorn[standard]>=0.28.0
+uvicorn[standard]==0.54.0
 # Validação e estruturação de esquemas de dados
-pydantic>=2.6.0
+pydantic==2.13.5
 # Leitura e gerenciamento tipado de configurações de ambiente
-pydantic-settings>=2.2.0
+pydantic-settings==2.15.0
 # Suporte a upload de arquivos e multipart/form-data no FastAPI
-python-multipart>=0.0.9
+python-multipart==0.0.32
 # Driver binário para conexão com PostgreSQL
-psycopg2-binary>=2.9.9
+psycopg2-binary==2.9.13
 # ORM e toolkit SQL para gerenciamento do banco de dados
-sqlalchemy>=2.0.28
-# Framework de testes unitários do backend
-pytest>=8.0.0
-# Cliente HTTP assíncrono para execução de testes unitários na API
-httpx>=0.27.0
-# Suporte a rotas e testes assíncronos no Pytest
-pytest-asyncio>=0.23.5
+sqlalchemy==2.1.1
+# Migrations versionadas do schema do banco
+alembic==1.20.0
 # Carregamento de variáveis do arquivo .env
-python-dotenv>=1.0.1
-# Cliente SDK para comunicação com Backblaze B2 (API compatível com S3)
-boto3>=1.34.0
+python-dotenv==1.2.3
+# Cliente SDK para storage compatível com S3 (Backblaze B2, Cloudflare R2, MinIO)
+boto3==1.43.103
 # Criptografia de senhas com algoritmo Argon2 (peso em memória RAM contra força bruta)
-argon2-cffi>=23.1.0
+argon2-cffi==25.1.0
 # Geração e validação de tokens JWT para autenticação segura
-pyjwt>=2.8.0
+pyjwt==2.15.0
+# Cliente HTTP (envio de e-mails pela API da Brevo)
+httpx==0.28.1

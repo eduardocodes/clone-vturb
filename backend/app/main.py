@@ -59,21 +59,14 @@ def init_super_admin():
         db.close()
 
 def init_db():
-    """Garante que todas as tabelas mapeadas no SQLAlchemy existam no banco de dados."""
-    try:
-        from app.core.database import Base, engine
-        import app.models.video  # noqa: F401
-        import app.models.user   # noqa: F401
-        import app.models.backup # noqa: F401
-        Base.metadata.create_all(bind=engine)
-        logger.info("Tabelas do banco de dados verificadas e inicializadas com sucesso.")
-    except Exception as exc:
-        logger.error(f"Erro ao inicializar tabelas do banco de dados: {exc}")
+    """Leva o schema do banco ao head do Alembic (mantido por compatibilidade)."""
+    from app.core.migrations import run_migrations
+    run_migrations()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
-    init_super_admin()
+    # Schema e Super Admin são preparados por `python -m app.bootstrap` antes do
+    # uvicorn subir, uma vez por container (não por worker).
     yield
 
 app = FastAPI(

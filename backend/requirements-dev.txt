@@ -1,0 +1,9 @@
+# Dependencias so de desenvolvimento e testes (nao entram na imagem de producao)
+-r requirements.txt
+
+# Framework de testes unitários do backend
+pytest==9.1.1
+# Suporte a rotas e testes assíncronos no Pytest
+pytest-asyncio==1.4.0
+# Leitura dos arquivos docker-compose nos testes de configuracao
+pyyaml==6.0.3
