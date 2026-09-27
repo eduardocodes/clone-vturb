@@ -6,6 +6,10 @@ import {
   getRetentionValues,
   getInterpolatedRetention,
   getYCoordinate,
+  getDotYCoordinatePct,
+  solveBezierT,
+  getBezierFactor,
+  getInterpolatedHourly,
   generateRetentionPaths,
   generateHourlyPaths,
 } from '../components/video-detail/metrics/retentionChartHelpers'
@@ -86,6 +90,36 @@ describe('retentionChartHelpers - Testes Unitários dos Utilitários de Retenç�
     expect(getYCoordinate(100)).toBe(15) // Topo
     expect(getYCoordinate(0)).toBe(190) // Base
     expect(getYCoordinate(50)).toBe(102.5) // Centro
+  })
+
+  it('calcula a porcentagem vertical do ponto scrubber perfeitamente alinhada à curva SVG', () => {
+    expect(getDotYCoordinatePct(100)).toBeCloseTo(7.5, 4) // 15 / 200 = 7.5%
+    expect(getDotYCoordinatePct(0)).toBeCloseTo(95, 4) // 190 / 200 = 95%
+    expect(getDotYCoordinatePct(50)).toBeCloseTo(51.25, 4) // 102.5 / 200 = 51.25%
+  })
+
+  it('calcula o parâmetro Bézier t e fator de suavização com precisão idêntica ao SVG', () => {
+    expect(solveBezierT(0)).toBe(0)
+    expect(solveBezierT(1)).toBe(1)
+    expect(solveBezierT(0.5)).toBeCloseTo(0.5, 4)
+    expect(getBezierFactor(0)).toBe(0)
+    expect(getBezierFactor(1)).toBe(1)
+    expect(getBezierFactor(0.5)).toBeCloseTo(0.5, 4)
+    // Para u = 0.72 (exemplo aos ~68%), fator reflete a curvatura cúbica suave
+    expect(getBezierFactor(0.72)).toBeGreaterThan(0.72)
+  })
+
+  it('interpola dados horários continuamente entre horas consecutivas', () => {
+    const list = [
+      { hour: 0, label: '00:00', impressions: 10, plays: 10 },
+      { hour: 1, label: '01:00', impressions: 20, plays: 20 },
+    ]
+    // 0% do range => plays = 10, maxActivity = 20 => 50%
+    expect(getInterpolatedHourly(0, list, 20)).toBe(50)
+    // 100% do range => plays = 20, maxActivity = 20 => 100%
+    expect(getInterpolatedHourly(100, list, 20)).toBe(100)
+    // 50% do range => plays = 15, maxActivity = 20 => 75%
+    expect(getInterpolatedHourly(50, list, 20)).toBe(75)
   })
 
   it('gera caminhos SVG de retenção e horários válidos', () => {

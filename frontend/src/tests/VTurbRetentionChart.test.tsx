@@ -95,9 +95,12 @@ describe('VTurbRetentionChart - Gráfico Oficial VTurb com Vídeo Centralizado',
   it('renderiza scrubber vertical tracejado com ponto verde e tooltip detalhado com audiência e retenção', () => {
     render(<VTurbRetentionChart video={mockVideo} metrics={mockMetrics} />)
 
-    // 1. Scrubber tracejado e ponto verde
+    // 1. Scrubber tracejado e ponto verde perfeitamente centralizado
     expect(screen.getByTestId('vturb-chart-scrubber')).toBeInTheDocument()
-    expect(screen.getByTestId('vturb-chart-dot')).toBeInTheDocument()
+    const dot = screen.getByTestId('vturb-chart-dot')
+    expect(dot).toBeInTheDocument()
+    expect(dot.style.transform).toBe('translate(-50%, -50%)')
+    expect(dot.style.left).toBe('0px')
 
     // 2. Tooltip flutuante com dados interpolados
     const tooltip = screen.getByTestId('vturb-chart-tooltip')
@@ -171,5 +174,42 @@ describe('VTurbRetentionChart - Gráfico Oficial VTurb com Vídeo Centralizado',
     expect(thumbnailWrapper).toBeInTheDocument()
     expect(thumbnailWrapper.querySelector('img')).toBeNull()
     expect(thumbnailWrapper).toHaveTextContent('video03.mp4')
+  })
+
+  it('exibe corretamente o tempo total no eixo X para vídeos longos (ex: 5 minutos / 300s)', () => {
+    const video5Min: Video = {
+      ...mockVideo,
+      duration: 300, // 5 minutos
+    }
+
+    render(<VTurbRetentionChart video={video5Min} metrics={mockMetrics} />)
+
+    const xAxis = screen.getByTestId('vturb-chart-x-axis')
+    expect(xAxis).toHaveTextContent('00:00')
+    expect(xAxis).toHaveTextContent('05:00')
+  })
+
+  it('renderiza marcador vertical tracejado e badge de oferta quando o momento do CTA está configurado', () => {
+    const videoWithCta: Video = {
+      ...mockVideo,
+      player_settings: {
+        ...mockVideo.player_settings,
+        cta_time: 60, // 01:00
+      },
+    }
+    const metricsWithCta: VideoMetrics = {
+      ...mockMetrics,
+      cta_metric: {
+        cta_time_seconds: 60,
+        cta_time_formatted: '01:00',
+        audience_reached: 50,
+        retention_percent: 52.6,
+      },
+    }
+
+    render(<VTurbRetentionChart video={videoWithCta} metrics={metricsWithCta} />)
+
+    expect(screen.getByTestId('chart-cta-marker-line')).toBeInTheDocument()
+    expect(screen.getByTestId('chart-cta-badge')).toHaveTextContent('🎯 Oferta 01:00')
   })
 })

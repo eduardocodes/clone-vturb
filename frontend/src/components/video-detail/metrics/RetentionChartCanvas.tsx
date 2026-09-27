@@ -12,6 +12,8 @@ interface RetentionChartCanvasProps {
   activePathD: string
   showConversions: boolean
   ctrPercent: number
+  ctaXPercent?: number
+  ctaLabel?: string
   children: React.ReactNode
 }
 
@@ -23,6 +25,8 @@ export const RetentionChartCanvas: React.FC<RetentionChartCanvasProps> = ({
   activePathD,
   showConversions,
   ctrPercent,
+  ctaXPercent,
+  ctaLabel,
   children,
 }) => {
   return (
@@ -162,7 +166,49 @@ export const RetentionChartCanvas: React.FC<RetentionChartCanvasProps> = ({
             strokeDasharray="4 4"
           />
         )}
+        {ctaXPercent !== undefined && ctaXPercent > 0 && ctaXPercent <= 100 && (
+          <line
+            data-testid="chart-cta-marker-line"
+            x1={ctaXPercent * 10}
+            y1="0"
+            x2={ctaXPercent * 10}
+            y2="200"
+            stroke="#f59e0b"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            opacity="0.85"
+          />
+        )}
       </svg>
+
+      {/* Badge Flutuante no Topo da Linha da Oferta */}
+      {ctaXPercent !== undefined && ctaXPercent > 0 && ctaXPercent <= 100 && (
+        <div
+          data-testid="chart-cta-badge"
+          style={{
+            position: 'absolute',
+            left: `${ctaXPercent}%`,
+            top: '8px',
+            transform: 'translateX(-50%)',
+            background: 'rgba(245, 158, 11, 0.92)',
+            color: '#ffffff',
+            fontSize: '0.68rem',
+            fontWeight: 800,
+            padding: '0.15rem 0.45rem',
+            borderRadius: '4px',
+            zIndex: 3,
+            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)',
+            pointerEvents: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.2rem',
+            letterSpacing: '0.02em',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span>🎯 Oferta {ctaLabel}</span>
+        </div>
+      )}
 
       {/* Scrubber e Tooltip passados como children */}
       {children}

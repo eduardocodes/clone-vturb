@@ -116,6 +116,7 @@ export async function updateVideo(
     title?: string
     video_url?: string
     thumbnail_url?: string
+    duration?: number
     player_settings?: Partial<PlayerSettings>
     storage_key?: string
     source_size_bytes?: number

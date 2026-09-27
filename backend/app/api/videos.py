@@ -27,6 +27,7 @@ from app.schemas.video import (
     VideoMetricsResponse,
     HourlyMetric,
     PeakHour,
+    CtaMetric,
     BulkDeleteRequest,
     BulkDeleteResponse,
 )
@@ -244,6 +245,8 @@ def update_video(
     if payload.thumbnail_url is not None and payload.thumbnail_url != video.thumbnail_url:
         stale_thumbnail = video.thumbnail_url
         video.thumbnail_url = payload.thumbnail_url
+    if payload.duration is not None:
+        video.duration = payload.duration
     if payload.player_settings is not None:
         video.player_settings = payload.player_settings.model_dump()
 
@@ -408,10 +411,36 @@ def get_video_metrics(
 
     clicks = base_query.filter(VideoAnalytics.event_type == "click").count()
 
-    prog_25 = base_query.filter(VideoAnalytics.event_type == "progress_25").count()
-    prog_50 = base_query.filter(VideoAnalytics.event_type == "progress_50").count()
-    prog_75 = base_query.filter(VideoAnalytics.event_type == "progress_75").count()
-    prog_100 = base_query.filter(VideoAnalytics.event_type == "progress_100").count()
+    play_sessions_subq = (
+        base_query.filter(
+            VideoAnalytics.event_type == "play",
+            VideoAnalytics.session_id.isnot(None),
+        )
+        .with_entities(VideoAnalytics.session_id)
+        .distinct()
+    )
+
+    def _count_unique_sessions(q) -> int:
+        scoped_q = q
+        if unique_plays > 0:
+            scoped_q = scoped_q.filter(VideoAnalytics.session_id.in_(play_sessions_subq))
+        with_sid = (
+            scoped_q.filter(VideoAnalytics.session_id.isnot(None))
+            .with_entities(func.count(func.distinct(VideoAnalytics.session_id)))
+            .scalar()
+            or 0
+        )
+        without_sid = (
+            0
+            if unique_plays > 0
+            else q.filter(VideoAnalytics.session_id.is_(None)).count()
+        )
+        return int(with_sid + without_sid)
+
+    prog_25 = _count_unique_sessions(base_query.filter(VideoAnalytics.event_type == "progress_25"))
+    prog_50 = _count_unique_sessions(base_query.filter(VideoAnalytics.event_type == "progress_50"))
+    prog_75 = _count_unique_sessions(base_query.filter(VideoAnalytics.event_type == "progress_75"))
+    prog_100 = _count_unique_sessions(base_query.filter(VideoAnalytics.event_type == "progress_100"))
 
     avg_watch_time = (
         base_query.filter(VideoAnalytics.watch_time_seconds > 0)
@@ -479,6 +508,59 @@ def get_video_metrics(
     start_date_iso = start_dt.astimezone(BRT_TZ).isoformat() if start_dt else None
     end_date_iso = end_dt.astimezone(BRT_TZ).isoformat() if end_dt else None
 
+    # Métrica da Oferta (CTA / Pitch) configurada no vídeo (sempre por pessoa única / session_id)
+    cta_metric: Optional[CtaMetric] = None
+    cta_time_sec = 0
+    if video.player_settings:
+        cta_time_sec = int(video.player_settings.get("cta_time") or 0)
+        if cta_time_sec <= 0 and isinstance(video.player_settings.get("pitch_delay"), dict):
+            cta_time_sec = int(video.player_settings.get("pitch_delay", {}).get("time") or 0)
+
+    if cta_time_sec > 0:
+        mins = cta_time_sec // 60
+        secs = cta_time_sec % 60
+        fmt = f"{mins:02d}:{secs:02d}"
+
+        eligible_events = ["cta_reached", "pitch_reached"]
+        dur = video.duration or 0.0
+        if dur > 0:
+            if dur * 0.25 >= cta_time_sec:
+                eligible_events.append("progress_25")
+            if dur * 0.50 >= cta_time_sec:
+                eligible_events.append("progress_50")
+            if dur * 0.75 >= cta_time_sec:
+                eligible_events.append("progress_75")
+            if dur >= cta_time_sec:
+                eligible_events.append("progress_100")
+
+        # Conta APENAS pessoas únicas (distinct session_id) que atingiram o tempo da oferta
+        audience_reached = _count_unique_sessions(
+            base_query.filter(
+                (VideoAnalytics.watch_time_seconds >= cta_time_sec)
+                | (
+                    VideoAnalytics.event_type.in_(eligible_events)
+                    & (
+                        (VideoAnalytics.watch_time_seconds >= cta_time_sec)
+                        | (VideoAnalytics.watch_time_seconds == 0)
+                        | (VideoAnalytics.watch_time_seconds.is_(None))
+                    )
+                )
+            )
+        )
+        aud_base = unique_plays if unique_plays > 0 else plays
+        ret_pct = (
+            min(100.0, round((audience_reached / aud_base * 100.0), 2))
+            if aud_base > 0
+            else 0.0
+        )
+
+        cta_metric = CtaMetric(
+            cta_time_seconds=cta_time_sec,
+            cta_time_formatted=fmt,
+            audience_reached=audience_reached,
+            retention_percent=ret_pct,
+        )
+
     return VideoMetricsResponse(
         video_id=video_id,
         period=period,
@@ -501,4 +583,5 @@ def get_video_metrics(
         },
         hourly_distribution=hourly_distribution,
         peak_hour=peak_hour,
+        cta_metric=cta_metric,
     )

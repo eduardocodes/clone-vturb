@@ -3,6 +3,7 @@ import type { Video } from '../../types/video'
 import { sendTelemetryEvent } from '../../services/api'
 import { useAutoplay } from '../../hooks/useAutoplay'
 import { useVideoTelemetry } from '../../hooks/useVideoTelemetry'
+import { isElementCurrentlyVisible } from './embedPlayerHelpers'
 
 interface UseEmbedPlaybackOptions {
   video: Video | null
@@ -34,6 +35,9 @@ export function useEmbedPlayback({
   const [currentSpeed, setCurrentSpeed] = useState(1.0)
   const [areControlsVisible, setAreControlsVisible] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPlayerVisible, setIsPlayerVisible] = useState<boolean>(() =>
+    isElementCurrentlyVisible(containerRef.current)
+  )
 
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -44,6 +48,45 @@ export function useEmbedPlayback({
     setShowCta,
   })
 
+  // Monitora se o player/iframe está realmente visível na tela (evita disparo oculto em etapas anteriores de Quiz)
+  useEffect(() => {
+    const checkVisibility = () => {
+      if (isElementCurrentlyVisible(containerRef.current)) {
+        setIsPlayerVisible(true)
+      }
+    }
+    checkVisibility()
+
+    const handleMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'VTURB_VISIBILITY' && typeof e.data.visible === 'boolean') {
+        if (e.data.visible) setIsPlayerVisible(true)
+      }
+    }
+
+    window.addEventListener('resize', checkVisibility)
+    document.addEventListener('visibilitychange', checkVisibility)
+    window.addEventListener('message', handleMsg)
+
+    let observer: IntersectionObserver | null = null
+    if (typeof IntersectionObserver !== 'undefined' && containerRef.current) {
+      observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && isElementCurrentlyVisible(containerRef.current)) {
+            setIsPlayerVisible(true)
+          }
+        })
+      }, { threshold: 0.05 })
+      observer.observe(containerRef.current)
+    }
+
+    return () => {
+      window.removeEventListener('resize', checkVisibility)
+      document.removeEventListener('visibilitychange', checkVisibility)
+      window.removeEventListener('message', handleMsg)
+      observer?.disconnect()
+    }
+  }, [video, containerRef])
+
   // Aplica velocidade Turbo configurada no vídeo se turbo_enabled for true
   useEffect(() => {
     if (videoRef.current) {
@@ -53,7 +96,7 @@ export function useEmbedPlayback({
     }
   }, [video, videoRef])
 
-  // Inicializa Autoplay via Hook customizado
+  // Inicializa Autoplay via Hook customizado apenas quando o player estiver visível
   useAutoplay({
     video,
     videoId,
@@ -63,6 +106,7 @@ export function useEmbedPlayback({
     setIsMuted,
     setIsSmartAutoplaying,
     setShowDirectUnmuteBanner,
+    isPlayerVisible,
   })
 
   useEffect(() => {
@@ -86,7 +130,14 @@ export function useEmbedPlayback({
     setCurrentTime(current)
     if (total > 0 && total !== duration) setDuration(total)
     if (current > 0.05 && !isVideoReady) setIsVideoReady(true)
-    handleTimeUpdateProgress(current, total)
+    const isSmartMutedPreview =
+      isSmartAutoplaying ||
+      Boolean(
+        video.player_settings?.smart_autoplay?.enabled &&
+          video.player_settings?.smart_autoplay?.mode !== 'direct' &&
+          videoRef.current.muted
+      )
+    handleTimeUpdateProgress(current, total, isSmartMutedPreview)
   }
 
   const handlePlay = () => {
@@ -191,10 +242,11 @@ export function useEmbedPlayback({
       setIsMuted(false)
       setShowDirectUnmuteBanner(false)
       videoRef.current.play().catch(() => {})
+      sendTelemetryEvent(videoId, { event_type: 'play', session_id: visitorId })
     }
   }
 
-  const handleEnded = () => handleEndedTelemetry(videoRef.current?.duration || 0)
+  const handleEnded = () => handleEndedTelemetry(videoRef.current?.duration || 0, isSmartAutoplaying)
   const handleCtaClick = () => sendTelemetryEvent(videoId, { event_type: 'click', session_id: visitorId })
 
   return {
@@ -214,6 +266,7 @@ export function useEmbedPlayback({
     areControlsVisible,
     setAreControlsVisible,
     isFullscreen,
+    isPlayerVisible,
     trackImpression,
     resetControlsVisibilityTimeout,
     handleTimeUpdate,

@@ -32,6 +32,32 @@ export const getRetentionValues = (metrics: VideoMetrics, totalPlays: number): R
   100: totalPlays > 0 ? ((metrics.retention['100%'] || 0) / totalPlays) * 100 : 0,
 })
 
+/**
+ * Resolve o parâmetro t em [0, 1] para a curva cúbica onde:
+ * u(t) = 1.5*t - 1.5*t^2 + t^3 = u
+ * Como du/dt = 3*(t - 0.5)^2 + 0.75 >= 0.75, a função é estritamente crescente
+ * e o método de Newton converge em 3 iterações com precisão sub-pixel.
+ */
+export const solveBezierT = (u: number): number => {
+  if (u <= 0) return 0
+  if (u >= 1) return 1
+  let t = u
+  for (let i = 0; i < 4; i++) {
+    const f = t * (1.5 + t * (-1.5 + t)) - u
+    const df = 1.5 + t * (-3.0 + 3.0 * t)
+    t = Math.max(0, Math.min(1, t - f / df))
+  }
+  return t
+}
+
+/**
+ * Calcula o fator de interpolação Bézier da curva suave idêntico ao SVG
+ */
+export const getBezierFactor = (u: number): number => {
+  const t = solveBezierT(u)
+  return t * t * (3 - 2 * t)
+}
+
 export const getInterpolatedRetention = (
   pct: number,
   retentionValues: RetentionValues,
@@ -42,16 +68,16 @@ export const getInterpolatedRetention = (
   let ret = 0
 
   if (pct <= 25) {
-    const factor = pct / 25
+    const factor = getBezierFactor(pct / 25)
     ret = retentionValues[0] + factor * (retentionValues[25] - retentionValues[0])
   } else if (pct <= 50) {
-    const factor = (pct - 25) / 25
+    const factor = getBezierFactor((pct - 25) / 25)
     ret = retentionValues[25] + factor * (retentionValues[50] - retentionValues[25])
   } else if (pct <= 75) {
-    const factor = (pct - 50) / 25
+    const factor = getBezierFactor((pct - 50) / 25)
     ret = retentionValues[50] + factor * (retentionValues[75] - retentionValues[50])
   } else {
-    const factor = (pct - 75) / 25
+    const factor = getBezierFactor((pct - 75) / 25)
     ret = retentionValues[75] + factor * (retentionValues[100] - retentionValues[75])
   }
 
@@ -64,9 +90,29 @@ export const getInterpolatedRetention = (
   }
 }
 
+export const getInterpolatedHourly = (
+  cursorPercent: number,
+  hourlyList: Array<{ hour: number; label: string; impressions: number; plays: number }>,
+  maxActivity: number
+): number => {
+  if (hourlyList.length === 0 || maxActivity <= 0) return 0
+  const pos = (cursorPercent / 100) * (hourlyList.length - 1)
+  const idx = Math.floor(pos)
+  const frac = pos - idx
+  const p1 = hourlyList[idx]?.plays ?? 0
+  const p2 = hourlyList[Math.min(hourlyList.length - 1, idx + 1)]?.plays ?? p1
+  const plays = p1 + frac * (p2 - p1)
+  return (plays / maxActivity) * 100
+}
+
 // Mapeamento Y para coordenadas SVG (altura 200, base y=190, topo y=15)
 export const getYCoordinate = (percent: number): number => {
   return 190 - (percent / 100) * 175
+}
+
+// Converte a coordenada Y do SVG para porcentagem exata de altura da tela
+export const getDotYCoordinatePct = (percent: number): number => {
+  return (getYCoordinate(percent) / 200) * 100
 }
 
 export const generateRetentionPaths = (retentionValues: RetentionValues) => {

@@ -46,8 +46,10 @@ export function useVideoTelemetry({
     }
   }
 
-  const handleTimeUpdateProgress = (current: number, total: number) => {
-    if (!video) return
+  const handleTimeUpdateProgress = (current: number, total: number, isSmartAutoplaying = false) => {
+    // Enquanto estiver apenas rodando mudo atrás da capa do Smart Autoplay ("Clique para Ouvir"),
+    // não contabiliza retenção nem alcance de oferta (CTA) antes de o lead clicar para assistir.
+    if (!video || isSmartAutoplaying) return
 
     if (total > 0) {
       const pct = (current / total) * 100
@@ -74,6 +76,11 @@ export function useVideoTelemetry({
       const pitchSeconds = video.player_settings.pitch_delay.time || 60
       if (current >= pitchSeconds) {
         pitchDelaySent.current = true
+        sendTelemetryEvent(videoId, {
+          event_type: 'pitch_reached',
+          watch_time_seconds: current,
+          session_id: visitorId,
+        })
         dispatchPixelEvent('pitch')
         const payload = {
           type: 'VTURB_PITCH_REACHED',
@@ -94,13 +101,25 @@ export function useVideoTelemetry({
       }
     }
 
-    // Gatilho de CTA Delay
-    if (video.player_settings?.cta_enabled && current >= video.player_settings.cta_time) {
-      setShowCta(true)
+    // Gatilho de Momento da Oferta (CTA) - registra alcance único apenas de quem está assistindo
+    const configuredCtaTime = Number(video.player_settings?.cta_time) || 0
+    if (configuredCtaTime > 0 && current >= configuredCtaTime) {
+      if (video.player_settings?.cta_enabled) {
+        setShowCta(true)
+      }
+      if (!progressSent.current['cta_reached']) {
+        progressSent.current['cta_reached'] = true
+        sendTelemetryEvent(videoId, {
+          event_type: 'cta_reached',
+          watch_time_seconds: current,
+          session_id: visitorId,
+        })
+      }
     }
   }
 
-  const handleEndedTelemetry = (duration: number) => {
+  const handleEndedTelemetry = (duration: number, isSmartAutoplaying = false) => {
+    if (isSmartAutoplaying) return
     if (!progressSent.current['100']) {
       progressSent.current['100'] = true
       sendTelemetryEvent(videoId, {

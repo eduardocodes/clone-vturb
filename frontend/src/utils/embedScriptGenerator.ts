@@ -102,6 +102,19 @@ export function generateEmbedCode({
     window.addEventListener(evt, notifyIframe, { once: true, passive: true });
   });
 
+  // Sincronização de ID de visitante 1st-party (evita duplicação no Safari iOS / Instagram Ads)
+  try {
+    var parentSid = localStorage.getItem('vturb_visitor_id');
+    if (!parentSid) {
+      parentSid = 'vis_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36);
+      localStorage.setItem('vturb_visitor_id', parentSid);
+    }
+    var ifrSid = document.querySelector('iframe[src*="' + videoId + '"]');
+    if (ifrSid && ifrSid.src && ifrSid.src.indexOf('sid=') === -1) {
+      ifrSid.src = ifrSid.src + (ifrSid.src.indexOf('?') !== -1 ? '&' : '?') + 'sid=' + encodeURIComponent(parentSid);
+    }
+  } catch(err) {}
+
   try {
     if (localStorage.getItem('vturb_pitch_' + videoId) === '1') {
       var sel = '${video.player_settings?.pitch_delay?.target_css_selector || '.delay-pitch'}';
@@ -109,12 +122,21 @@ export function generateEmbedCode({
     }
   } catch(err) {}
 
-  // Lógica do Player Flutuante (Picture-in-Picture no site externo)
+  // Lógica do Player Flutuante e Visibilidade Real na Tela
   function setupFloatingObserver() {
-    if (!isFloatingConfig) return;
     var wrapper = document.getElementById('vturb-wrapper-' + videoId);
     var ifr = document.querySelector('iframe[src*="' + videoId + '"]');
-    if (!wrapper || !ifr) return;
+    if (wrapper && ifr && 'IntersectionObserver' in window) {
+      var visObserver = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting && ifr.contentWindow) {
+            try { ifr.contentWindow.postMessage({ type: 'VTURB_VISIBILITY', visible: true }, '*'); } catch(e) {}
+          }
+        });
+      }, { threshold: 0.05 });
+      visObserver.observe(wrapper);
+    }
+    if (!isFloatingConfig || !wrapper || !ifr) return;
 
     // Cria botão de fechar flutuante se não existir
     var closeBtn = document.getElementById('vturb-close-floating-' + videoId);

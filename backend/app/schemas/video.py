@@ -115,6 +115,7 @@ class VideoUpdate(BaseModel):
     title: Optional[str] = None
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    duration: Optional[float] = None
     player_settings: Optional[PlayerSettings] = None
     storage_key: Optional[str] = Field(None, pattern=STORAGE_KEY_PATTERN)
     source_size_bytes: Optional[int] = Field(None, ge=0)
@@ -153,6 +154,12 @@ class PeakHour(BaseModel):
     plays: int
     total_activity: int
 
+class CtaMetric(BaseModel):
+    cta_time_seconds: int
+    cta_time_formatted: str
+    audience_reached: int
+    retention_percent: float
+
 class VideoMetricsResponse(BaseModel):
     video_id: str
     period: Optional[str] = "all"
@@ -170,6 +177,7 @@ class VideoMetricsResponse(BaseModel):
     retention: Dict[str, int]
     hourly_distribution: List[HourlyMetric] = []
     peak_hour: Optional[PeakHour] = None
+    cta_metric: Optional[CtaMetric] = None
 
 
 class BulkDeleteRequest(BaseModel):

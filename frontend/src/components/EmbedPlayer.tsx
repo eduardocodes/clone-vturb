@@ -54,6 +54,7 @@ export const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ videoId }) => {
     currentSpeed,
     areControlsVisible,
     isFullscreen,
+    isPlayerVisible,
     trackImpression,
     resetControlsVisibilityTimeout,
     handleTimeUpdate,
@@ -100,7 +101,6 @@ export const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ videoId }) => {
         setLoading(true)
         const data = await fetchVideo(videoId)
         setVideo(data)
-        trackImpression()
       } catch (err: any) {
         setError('Vídeo indisponível ou excluído.')
       } finally {
@@ -109,6 +109,12 @@ export const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ videoId }) => {
     }
     init()
   }, [videoId, visitorId])
+
+  useEffect(() => {
+    if (video && isPlayerVisible && !domainBlocked) {
+      trackImpression()
+    }
+  }, [video, isPlayerVisible, domainBlocked])
 
   if (loading) return <EmbedLoadingState />
   if (error || !video) return <EmbedErrorState error={error} />
