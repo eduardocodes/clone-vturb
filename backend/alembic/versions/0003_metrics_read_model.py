@@ -27,6 +27,10 @@ def upgrade() -> None:
     sa.Column('day', sa.Date(), nullable=False),
     sa.Column('unique_impressions', sa.Integer(), nullable=False),
     sa.Column('unique_plays', sa.Integer(), nullable=False),
+    sa.Column('unique_p25', sa.Integer(), nullable=False),
+    sa.Column('unique_p50', sa.Integer(), nullable=False),
+    sa.Column('unique_p75', sa.Integer(), nullable=False),
+    sa.Column('unique_p100', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['video_id'], ['videos.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('video_id', 'day')
     )

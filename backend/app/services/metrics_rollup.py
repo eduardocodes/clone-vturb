@@ -109,23 +109,69 @@ def roll_daily(db: Session, now: datetime) -> None:
     logger.info("Rollup diário consolidado até %s", until_day.isoformat())
 
 
+MILESTONES = ("progress_25", "progress_50", "progress_75", "progress_100")
+
+
+def _milestone_expr(event_type: str) -> str:
+    # Regra do painel: marco conta pessoa única entre as que deram play no dia; dia sem
+    # nenhum play (instalações antigas, eventos sem sessão) conta todo mundo do marco.
+    return f"""CASE WHEN bool_or(day_has_players)
+            THEN count(DISTINCT session_id) FILTER (WHERE event_type = '{event_type}' AND played)
+            ELSE count(DISTINCT session_id) FILTER (WHERE event_type = '{event_type}')
+                 + count(*) FILTER (WHERE event_type = '{event_type}' AND session_id IS NULL)
+        END"""
+
+
+# Únicos por (vídeo, dia UTC) no intervalo [start, end]. Usado pelo rollup (um dia fechado)
+# e pela leitura ao vivo (o que ainda não foi consolidado).
+DAILY_UNIQUES_SQL = f"""
+    WITH ev AS (
+        SELECT video_id, (created_at AT TIME ZONE 'UTC')::date AS day, event_type, session_id
+        FROM video_analytics
+        WHERE (CAST(:start AS timestamptz) IS NULL OR created_at >= :start)
+          AND (CAST(:end AS timestamptz) IS NULL OR created_at <= :end)
+          AND (CAST(:video_id AS varchar) IS NULL OR video_id = :video_id)
+    ),
+    players AS (
+        SELECT DISTINCT video_id, day, session_id FROM ev
+        WHERE event_type = 'play' AND session_id IS NOT NULL
+    ),
+    player_days AS (SELECT DISTINCT video_id, day FROM players),
+    tagged AS (
+        SELECT ev.*, p.session_id IS NOT NULL AS played, d.day IS NOT NULL AS day_has_players
+        FROM ev
+        LEFT JOIN players p ON p.video_id = ev.video_id AND p.day = ev.day AND p.session_id = ev.session_id
+        LEFT JOIN player_days d ON d.video_id = ev.video_id AND d.day = ev.day
+    )
+    SELECT
+        video_id,
+        day,
+        count(DISTINCT session_id) FILTER (WHERE event_type = 'impression') AS unique_impressions,
+        count(DISTINCT session_id) FILTER (WHERE event_type = 'play') AS unique_plays,
+        {_milestone_expr("progress_25")} AS unique_p25,
+        {_milestone_expr("progress_50")} AS unique_p50,
+        {_milestone_expr("progress_75")} AS unique_p75,
+        {_milestone_expr("progress_100")} AS unique_p100
+    FROM tagged
+    GROUP BY video_id, day
+"""
+UNIQUE_COLUMNS = ("unique_impressions", "unique_plays", "unique_p25", "unique_p50", "unique_p75", "unique_p100")
+
+
 def _roll_uniques(db: Session, day: date) -> None:
+    cols = ", ".join(UNIQUE_COLUMNS)
+    updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in UNIQUE_COLUMNS)
     db.execute(
-        text("""
-            INSERT INTO video_metrics_daily (video_id, day, unique_impressions, unique_plays)
-            SELECT
-                video_id,
-                :day,
-                count(DISTINCT session_id) FILTER (WHERE event_type = 'impression'),
-                count(DISTINCT session_id) FILTER (WHERE event_type = 'play')
-            FROM video_analytics
-            WHERE created_at >= :start AND created_at < :end AND session_id IS NOT NULL
-            GROUP BY video_id
-            ON CONFLICT (video_id, day) DO UPDATE SET
-                unique_impressions = EXCLUDED.unique_impressions,
-                unique_plays = EXCLUDED.unique_plays
+        text(f"""
+            INSERT INTO video_metrics_daily (video_id, day, {cols})
+            SELECT video_id, day, {cols} FROM ({DAILY_UNIQUES_SQL}) u
+            ON CONFLICT (video_id, day) DO UPDATE SET {updates}
         """),
-        {"day": day, "start": _day_start(day), "end": _day_start(day + timedelta(days=1))},
+        {
+            "start": _day_start(day),
+            "end": _day_start(day + timedelta(days=1)) - timedelta(microseconds=1),
+            "video_id": None,
+        },
     )
 
 

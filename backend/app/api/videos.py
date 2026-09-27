@@ -24,7 +24,15 @@ from app.api.deps import get_current_user
 from app.core.rate_limit import rate_limit
 from app.services.storage import StorageNotConfigured, storage_service
 from app.services.watch_ranges import merge_ranges, watched_seconds
-from app.services.metrics_query import downsample_curve, event_totals, plays_by_video, retention_totals, unique_totals
+from app.services.metrics_query import (
+    cta_reach_from_curve,
+    cta_reach_from_events,
+    downsample_curve,
+    event_totals,
+    plays_by_video,
+    retention_totals,
+    unique_totals,
+)
 from app.schemas.video import (
     VideoCreate,
     VideoUpdate,
@@ -34,6 +42,7 @@ from app.schemas.video import (
     VideoMetricsResponse,
     HourlyMetric,
     PeakHour,
+    CtaMetric,
     BulkDeleteRequest,
     BulkDeleteResponse,
 )
@@ -240,6 +249,8 @@ def update_video(
     if payload.thumbnail_url is not None and payload.thumbnail_url != video.thumbnail_url:
         stale_thumbnail = video.thumbnail_url
         video.thumbnail_url = payload.thumbnail_url
+    if payload.duration is not None:
+        video.duration = payload.duration
     if payload.player_settings is not None:
         video.player_settings = payload.player_settings.model_dump()
 
@@ -433,12 +444,14 @@ def get_video_metrics(
         period = "all"
 
     # Consolidado (rollup) até a watermark + eventos brutos depois dela: sempre em dia.
-    # Únicos = sessões distintas por dia, somadas no período.
+    # Únicos = pessoas distintas por dia, somadas no período. Marcos (25-100%) contam
+    # pessoas únicas que deram play (o autoplay mudo atrás da capa não conta).
     events = event_totals(db, video_id, start_dt, end_dt, BRT_TZ)
     totals = events.totals
     impressions = totals["impression"]
     plays = totals["play"]
-    unique_impressions, unique_plays = unique_totals(db, video_id, start_dt, end_dt)
+    uniques = unique_totals(db, video_id, start_dt, end_dt)
+    unique_impressions, unique_plays = uniques["unique_impressions"], uniques["unique_plays"]
     clicks = totals["click"]
     watch = retention_totals(db, video_id, start_dt, end_dt)
     avg_watch_time = (watch.watch_seconds / watch.sessions) if watch.sessions else 0.0
@@ -487,6 +500,25 @@ def get_video_metrics(
     start_date_iso = start_dt.astimezone(BRT_TZ).isoformat() if start_dt else None
     end_date_iso = end_dt.astimezone(BRT_TZ).isoformat() if end_dt else None
 
+    # Alcance da oferta (CTA / pitch) por pessoa única: pela curva por segundo quando o
+    # player manda trechos assistidos; senão, pelos eventos (players antigos).
+    cta_metric: Optional[CtaMetric] = None
+    settings_ = video.player_settings or {}
+    cta_time_sec = int(settings_.get("cta_time") or 0)
+    if cta_time_sec <= 0 and isinstance(settings_.get("pitch_delay"), dict):
+        cta_time_sec = int(settings_["pitch_delay"].get("time") or 0)
+
+    if cta_time_sec > 0:
+        reach = cta_reach_from_curve(watch.counts, watch.sessions, cta_time_sec) or cta_reach_from_events(
+            db, video_id, start_dt, end_dt, cta_time_sec, video.duration or 0.0, unique_plays, plays
+        )
+        cta_metric = CtaMetric(
+            cta_time_seconds=cta_time_sec,
+            cta_time_formatted=f"{cta_time_sec // 60:02d}:{cta_time_sec % 60:02d}",
+            audience_reached=reach.audience_reached,
+            retention_percent=reach.retention_percent,
+        )
+
     return VideoMetricsResponse(
         video_id=video_id,
         period=period,
@@ -502,12 +534,13 @@ def get_video_metrics(
         ctr=ctr,
         avg_watch_time_seconds=round(float(avg_watch_time), 2),
         retention={
-            "25%": totals["progress_25"],
-            "50%": totals["progress_50"],
-            "75%": totals["progress_75"],
-            "100%": totals["progress_100"],
+            "25%": uniques["unique_p25"],
+            "50%": uniques["unique_p50"],
+            "75%": uniques["unique_p75"],
+            "100%": uniques["unique_p100"],
         },
         hourly_distribution=hourly_distribution,
         peak_hour=peak_hour,
         retention_curve=downsample_curve(watch.counts, watch.sessions),
+        cta_metric=cta_metric,
     )

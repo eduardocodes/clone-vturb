@@ -31,28 +31,29 @@ export const RetentionChartScrubber: React.FC<RetentionChartScrubberProps> = ({
       style={{
         position: 'absolute',
         left: `${cursorPercent}%`,
-        top: '10px',
-        bottom: '20px',
+        top: 0,
+        bottom: 0,
         width: '1px',
         borderLeft: '1px dashed rgba(255, 255, 255, 0.55)',
         pointerEvents: 'none',
         zIndex: 4,
       }}
     >
-      {/* Ponto Verde no cruzamento */}
+      {/* Ponto Verde centralizado exatamente no meio da linha */}
       <div
         data-testid="vturb-chart-dot"
         style={{
           position: 'absolute',
           top: `${dotYPct}%`,
-          left: '-5px',
+          left: '0px',
           width: '11px',
           height: '11px',
           borderRadius: '50%',
           background: '#22c55e',
           border: '2px solid #ffffff',
           boxShadow: '0 0 10px #22c55e',
-          transform: 'translateY(-50%)',
+          transform: 'translate(-50%, -50%)',
+          boxSizing: 'border-box',
         }}
       />
 

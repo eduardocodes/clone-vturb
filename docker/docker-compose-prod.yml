@@ -5,7 +5,7 @@ services:
   # Backend API (FastAPI + SQLAlchemy + Uvicorn Multi-Workers)
   # ============================================================================
   backend:
-    image: ${BACKEND_IMAGE:-aryalvesfernandes/clone-vturb:backend-1.0.8}
+    image: ${BACKEND_IMAGE:-aryalvesfernandes/clone-vturb:backend-1.0.9}
     build:
       context: ..
       dockerfile: docker/backend/Dockerfile.prod
@@ -61,7 +61,7 @@ services:
   # Frontend SPA (React + Vite + Nginx Alpine)
   # ============================================================================
   frontend:
-    image: ${FRONTEND_IMAGE:-aryalvesfernandes/clone-vturb:frontend-1.0.8}
+    image: ${FRONTEND_IMAGE:-aryalvesfernandes/clone-vturb:frontend-1.0.9}
     build:
       context: ..
       dockerfile: docker/frontend/Dockerfile.prod

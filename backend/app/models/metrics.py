@@ -26,13 +26,21 @@ class MetricsHourly(Base):
 
 
 class MetricsDaily(Base):
-    """Visitantes únicos (sessões distintas) por dia; somar dias conta quem volta em outro dia."""
+    """Visitantes únicos (sessões distintas) por dia; somar dias conta quem volta em outro dia.
+
+    unique_pNN: pessoas que chegaram ao marco, só entre as que deram play no dia (o autoplay
+    mudo atrás da capa não conta). Dia sem nenhum play conta todas as pessoas do marco.
+    """
     __tablename__ = "video_metrics_daily"
 
     video_id = Column(String(36), ForeignKey("videos.id", ondelete="CASCADE"), nullable=False)
     day = Column(Date, nullable=False)
     unique_impressions = Column(Integer, nullable=False, default=0)
     unique_plays = Column(Integer, nullable=False, default=0)
+    unique_p25 = Column(Integer, nullable=False, default=0)
+    unique_p50 = Column(Integer, nullable=False, default=0)
+    unique_p75 = Column(Integer, nullable=False, default=0)
+    unique_p100 = Column(Integer, nullable=False, default=0)
 
     __table_args__ = (PrimaryKeyConstraint("video_id", "day"),)
 

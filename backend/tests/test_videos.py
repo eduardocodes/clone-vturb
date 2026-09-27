@@ -481,9 +481,87 @@ def test_video_controls_styling_config():
     client.delete(f"/videos/{video_id}")
 
 
+def test_cta_metric_and_duration_update():
+    """Valida a atualização de duration via PUT e o cálculo de cta_metric (Chegaram na Oferta) nas métricas."""
+    # 1. Cria vídeo inicialmente com duration 0.0
+    create_res = client.post("/videos/", json={
+        "title": "Vídeo Teste Oferta CTA e Duração",
+        "video_url": "https://cdn.exemplo.com/vsl_5min.mp4",
+        "duration": 0.0,
+        "player_settings": {
+            "primary_color": "#10b981",
+            "cta_time": 135  # 02:15
+        }
+    })
+    assert create_res.status_code == 201
+    video_id = create_res.json()["id"]
+    assert create_res.json()["duration"] == 0.0
 
+    # 2. Atualiza a duração via PUT (simulando auto-detecção de 5 minutos = 300s)
+    put_res = client.put(f"/videos/{video_id}", json={
+        "duration": 300.0
+    })
+    assert put_res.status_code == 200
+    assert put_res.json()["duration"] == 300.0
 
+    # 3. Registra eventos simulando a MESMA pessoa (sess_cta_1) assistindo 5 vezes até a oferta
+    for _ in range(5):
+        client.post(f"/videos/{video_id}/events", json={
+            "event_type": "play",
+            "watch_time_seconds": 150.0,
+            "session_id": "sess_cta_1"
+        })
+        client.post(f"/videos/{video_id}/events", json={
+            "event_type": "progress_75",
+            "watch_time_seconds": 225.0,
+            "session_id": "sess_cta_1"
+        })
+        client.post(f"/videos/{video_id}/events", json={
+            "event_type": "cta_reached",
+            "watch_time_seconds": 135.0,
+            "session_id": "sess_cta_1"
+        })
 
+    # E uma segunda pessoa (sess_cta_2) que assistiu apenas 60s (não chegou na oferta de 135s)
+    client.post(f"/videos/{video_id}/events", json={
+        "event_type": "play",
+        "watch_time_seconds": 60.0,
+        "session_id": "sess_cta_2"
+    })
+
+    # E uma sessão fantasma (ex: vídeo rodando mudo em fundo no Smart Autoplay SEM clique de play)
+    client.post(f"/videos/{video_id}/events", json={
+        "event_type": "impression",
+        "session_id": "sess_phantom_no_play"
+    })
+    client.post(f"/videos/{video_id}/events", json={
+        "event_type": "progress_75",
+        "watch_time_seconds": 250.0,
+        "session_id": "sess_phantom_no_play"
+    })
+    client.post(f"/videos/{video_id}/events", json={
+        "event_type": "cta_reached",
+        "watch_time_seconds": 250.0,
+        "session_id": "sess_phantom_no_play"
+    })
+
+    # 4. Consulta métricas e verifica que sess_cta_1 foi contada APENAS 1 VEZ e sess_phantom_no_play foi ignorada
+    metrics_res = client.get(f"/videos/{video_id}/metrics")
+    assert metrics_res.status_code == 200
+    metrics = metrics_res.json()
+
+    assert metrics["unique_plays"] == 2
+    assert metrics["retention"]["75%"] == 1  # Não duplicou sess_cta_1 e ignorou sess_phantom_no_play
+
+    assert metrics["cta_metric"] is not None
+    cta = metrics["cta_metric"]
+    assert cta["cta_time_seconds"] == 135.0
+    assert cta["cta_time_formatted"] == "02:15"
+    assert cta["audience_reached"] == 1  # Apenas 1 pessoa real chegou na oferta
+    assert cta["retention_percent"] == 50.0  # 1 de 2 espectadores únicos = 50%
+
+    # Limpeza
+    client.delete(f"/videos/{video_id}")
 
 
 def test_video_smart_progress_setting():

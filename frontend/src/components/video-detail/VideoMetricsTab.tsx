@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { BarChart3, Clock, Filter, RotateCcw } from 'lucide-react'
+import { BarChart3, Clock, Filter, RotateCcw, Target, Check } from 'lucide-react'
 import type { Video, VideoMetrics } from '../../types/video'
-import { fetchVideoMetrics } from '../../services/api'
+import { fetchVideoMetrics, updateVideo } from '../../services/api'
 import {
   DateFilterBar,
   MetricsOverviewSection,
@@ -27,6 +27,23 @@ export const VideoMetricsTab: React.FC<VideoMetricsTabProps> = ({ video, showToa
   const [period, setPeriod] = useState<string>('all')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
+
+  // Configuração rápida do Momento da Oferta (CTA)
+  const currentCtaSec =
+    metrics?.cta_metric?.cta_time_seconds ||
+    video.player_settings?.cta_time ||
+    video.player_settings?.pitch_delay?.time ||
+    0
+  const [ctaMinutes, setCtaMinutes] = useState<number>(Math.floor(currentCtaSec / 60))
+  const [ctaSeconds, setCtaSeconds] = useState<number>(currentCtaSec % 60)
+  const [savingCta, setSavingCta] = useState(false)
+
+  useEffect(() => {
+    if (currentCtaSec > 0) {
+      setCtaMinutes(Math.floor(currentCtaSec / 60))
+      setCtaSeconds(currentCtaSec % 60)
+    }
+  }, [currentCtaSec])
 
   const loadMetrics = useCallback(async (currentPeriod = period, start = startDate, end = endDate) => {
     try {
@@ -58,6 +75,24 @@ export const VideoMetricsTab: React.FC<VideoMetricsTabProps> = ({ video, showToa
       return
     }
     loadMetrics('custom', startDate, endDate)
+  }
+
+  const handleSaveCtaTime = async () => {
+    const totalSec = Math.max(0, Number(ctaMinutes) * 60 + Number(ctaSeconds))
+    try {
+      setSavingCta(true)
+      const updatedSettings = {
+        ...video.player_settings,
+        cta_time: totalSec,
+      }
+      await updateVideo(video.id, { player_settings: updatedSettings })
+      showToast('Momento da oferta (CTA) salvo com sucesso!')
+      loadMetrics()
+    } catch {
+      showToast('Erro ao salvar momento da oferta.')
+    } finally {
+      setSavingCta(false)
+    }
   }
 
   const subTabs = [
@@ -102,6 +137,99 @@ export const VideoMetricsTab: React.FC<VideoMetricsTabProps> = ({ video, showToa
           <RotateCcw size={15} className={loading ? 'spin' : ''} />
           <span>{loading ? 'Atualizando...' : 'Recarregar'}</span>
         </button>
+      </div>
+
+      {/* Barra de Configuração Rápida do Momento da Oferta / CTA */}
+      <div
+        data-testid="metrics-cta-config-card"
+        style={{
+          background: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid #fcd34d',
+          padding: '1.15rem 1.4rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          boxShadow: '0 1px 3px rgba(245, 158, 11, 0.08)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '10px',
+              background: '#fef3c7',
+              color: '#d97706',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Target size={22} />
+          </div>
+          <div>
+            <h4 style={{ margin: '0 0 0.15rem', fontSize: '0.98rem', fontWeight: 700, color: '#1e293b' }}>
+              Configurar Momento da Oferta (CTA)
+            </h4>
+            <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+              Defina o minuto e segundo em que sua oferta começa para ver quantos espectadores chegam nela.
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#f8fafc', padding: '0.4rem 0.65rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+            <input
+              type="number"
+              min="0"
+              max="180"
+              data-testid="input-cta-minutes"
+              value={ctaMinutes}
+              onChange={(e) => setCtaMinutes(Math.max(0, parseInt(e.target.value) || 0))}
+              style={{ width: '42px', border: 'none', background: 'transparent', textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', outline: 'none' }}
+            />
+            <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>min</span>
+            <span style={{ color: '#94a3b8', fontWeight: 800 }}>:</span>
+            <input
+              type="number"
+              min="0"
+              max="59"
+              data-testid="input-cta-seconds"
+              value={ctaSeconds}
+              onChange={(e) => setCtaSeconds(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+              style={{ width: '42px', border: 'none', background: 'transparent', textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', outline: 'none' }}
+            />
+            <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>seg</span>
+          </div>
+
+          <button
+            type="button"
+            data-testid="btn-save-cta-time"
+            onClick={handleSaveCtaTime}
+            disabled={savingCta}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.6rem 1.15rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: '#d97706',
+              color: '#ffffff',
+              fontSize: '0.88rem',
+              fontWeight: 700,
+              cursor: savingCta ? 'not-allowed' : 'pointer',
+              boxShadow: '0 2px 6px rgba(217, 119, 6, 0.25)',
+            }}
+          >
+            <Check size={16} />
+            <span>{savingCta ? 'Salvando...' : 'Salvar Momento'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Barra de Filtros por Período / Data */}

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Play, UserCheck, Users, Eye, Clock, MousePointerClick, TrendingUp } from 'lucide-react'
+import { Play, UserCheck, Users, Eye, Clock, MousePointerClick, TrendingUp, Target } from 'lucide-react'
 import type { VideoMetrics } from '../../../types/video'
 
 interface MetricsOverviewSectionProps {
@@ -17,6 +17,40 @@ export const MetricsOverviewSection: React.FC<MetricsOverviewSectionProps> = ({ 
           gap: '1rem',
         }}
       >
+        {/* Chegaram na Oferta (CTA) */}
+        <div
+          data-testid="metric-cta-reached-card"
+          style={{
+            background: metrics.cta_metric ? 'linear-gradient(135deg, #ffffff 0%, #fffbeb 100%)' : '#ffffff',
+            padding: '1.25rem',
+            borderRadius: '12px',
+            border: metrics.cta_metric ? '1px solid #fcd34d' : '1px dashed #cbd5e1',
+            boxShadow: metrics.cta_metric ? '0 2px 8px rgba(245, 158, 11, 0.15)' : '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#d97706', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Target size={16} color="#d97706" />
+              Chegaram na Oferta (CTA)
+            </span>
+            {metrics.cta_metric && (
+              <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700 }}>
+                {metrics.cta_metric.cta_time_formatted}
+              </span>
+            )}
+          </div>
+          <div data-testid="metric-cta-audience" style={{ fontSize: '1.85rem', fontWeight: 800, color: metrics.cta_metric ? '#b45309' : '#94a3b8' }}>
+            {metrics.cta_metric
+              ? `${metrics.cta_metric.audience_reached} ${metrics.cta_metric.audience_reached === 1 ? 'pessoa' : 'pessoas'}`
+              : 'Definir horário'}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: metrics.cta_metric ? '#78350f' : '#94a3b8', marginTop: '0.25rem', fontWeight: 600 }}>
+            {metrics.cta_metric
+              ? `${metrics.cta_metric.retention_percent}% de retenção no pitch`
+              : 'Configure o momento da oferta no painel'}
+          </div>
+        </div>
+
         {/* Plays Totais */}
         <div style={{ background: '#ffffff', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>

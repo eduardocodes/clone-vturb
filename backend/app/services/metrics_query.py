@@ -4,12 +4,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone, tzinfo
 from typing import Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.models.metrics import MetricsDaily, MetricsHourly, RetentionDaily
 from app.models.video import VideoAnalytics, VideoWatchSession
-from app.services.metrics_rollup import DAILY, HOURLY, watermark
+from app.services.metrics_rollup import DAILY, DAILY_UNIQUES_SQL, HOURLY, UNIQUE_COLUMNS, watermark
 from app.services.watch_ranges import retention_counts, sum_counts
 
 # Coluna do consolidado <-> tipo de evento bruto
@@ -112,44 +112,82 @@ def retention_totals(db: Session, video_id: str, start: Optional[datetime], end:
     return result
 
 
-def unique_totals(db: Session, video_id: str, start: Optional[datetime], end: Optional[datetime]) -> tuple[int, int]:
-    """(impressões únicas, plays únicos): sessões distintas por dia, somadas no período."""
+def unique_totals(db: Session, video_id: str, start: Optional[datetime], end: Optional[datetime]) -> dict:
+    """Únicos do período por coluna de UNIQUE_COLUMNS: pessoas distintas por dia, somadas."""
     start_day = start.astimezone(timezone.utc).date() if start else None
     end_day = end.astimezone(timezone.utc).date() if end else None
     wm = watermark(db, DAILY)
-    impressions = plays = 0
+    result = {c: 0 for c in UNIQUE_COLUMNS}
 
     if wm is not None:
-        q = db.query(func.sum(MetricsDaily.unique_impressions), func.sum(MetricsDaily.unique_plays)).filter(
+        q = db.query(*(func.sum(getattr(MetricsDaily, c)) for c in UNIQUE_COLUMNS)).filter(
             MetricsDaily.video_id == video_id, MetricsDaily.day < wm.date()
         )
         if start_day:
             q = q.filter(MetricsDaily.day >= start_day)
         if end_day:
             q = q.filter(MetricsDaily.day <= end_day)
-        rolled_impressions, rolled_plays = q.one()
-        impressions += int(rolled_impressions or 0)
-        plays += int(rolled_plays or 0)
+        for column, value in zip(UNIQUE_COLUMNS, q.one()):
+            result[column] += int(value or 0)
 
-    day = func.date(func.timezone("UTC", VideoAnalytics.created_at))
-    q = (
-        db.query(
-            day,
-            func.count(func.distinct(VideoAnalytics.session_id)).filter(VideoAnalytics.event_type == "impression"),
-            func.count(func.distinct(VideoAnalytics.session_id)).filter(VideoAnalytics.event_type == "play"),
-        )
-        .filter(VideoAnalytics.video_id == video_id, VideoAnalytics.session_id.isnot(None))
-        .group_by(day)
-    )
     live_start = max(filter(None, [start, wm]), default=None)
-    if live_start:
-        q = q.filter(VideoAnalytics.created_at >= live_start)
+    rows = db.execute(text(DAILY_UNIQUES_SQL), {"start": live_start, "end": end, "video_id": video_id}).mappings()
+    for row in rows:
+        for column in UNIQUE_COLUMNS:
+            result[column] += int(row[column] or 0)
+    return result
+
+
+@dataclass
+class CtaReach:
+    audience_reached: int
+    retention_percent: float
+
+
+def cta_reach_from_curve(counts: list, sessions: int, cta_seconds: int) -> Optional[CtaReach]:
+    """Pessoas que assistiram o segundo da oferta, pela curva por segundo. None sem curva."""
+    if sessions <= 0:
+        return None
+    reached = counts[cta_seconds] if cta_seconds < len(counts) else 0
+    return CtaReach(reached, min(100.0, round(reached / sessions * 100.0, 2)))
+
+
+def cta_reach_from_events(
+    db: Session, video_id: str, start: Optional[datetime], end: Optional[datetime],
+    cta_seconds: int, duration: float, unique_plays: int, plays: int,
+) -> CtaReach:
+    """Alcance da oferta pelos eventos brutos (players sem trechos assistidos): regra da v1.0.9."""
+    base = db.query(VideoAnalytics).filter(VideoAnalytics.video_id == video_id)
+    if start:
+        base = base.filter(VideoAnalytics.created_at >= start)
     if end:
-        q = q.filter(VideoAnalytics.created_at <= end)
-    for _, day_impressions, day_plays in q.all():
-        impressions += day_impressions
-        plays += day_plays
-    return impressions, plays
+        base = base.filter(VideoAnalytics.created_at <= end)
+
+    eligible = ["cta_reached", "pitch_reached"]
+    if duration > 0:
+        eligible += [f"progress_{p}" for p in (25, 50, 75, 100) if duration * p / 100 >= cta_seconds]
+    watch = VideoAnalytics.watch_time_seconds
+    q = base.filter(
+        (watch >= cta_seconds)
+        | (VideoAnalytics.event_type.in_(eligible) & ((watch >= cta_seconds) | (watch == 0) | watch.is_(None)))
+    )
+    if unique_plays > 0:
+        players = (
+            base.filter(VideoAnalytics.event_type == "play", VideoAnalytics.session_id.isnot(None))
+            .with_entities(VideoAnalytics.session_id)
+            .distinct()
+        )
+        reached = q.filter(VideoAnalytics.session_id.in_(players)).with_entities(
+            func.count(func.distinct(VideoAnalytics.session_id))
+        ).scalar() or 0
+    else:
+        reached = (
+            (q.filter(VideoAnalytics.session_id.isnot(None)).with_entities(func.count(func.distinct(VideoAnalytics.session_id))).scalar() or 0)
+            + q.filter(VideoAnalytics.session_id.is_(None)).count()
+        )
+    base_count = unique_plays if unique_plays > 0 else plays
+    percent = min(100.0, round(reached / base_count * 100.0, 2)) if base_count > 0 else 0.0
+    return CtaReach(int(reached), percent)
 
 
 def downsample_curve(counts: list, sessions: int, max_points: int = MAX_CURVE_POINTS) -> dict:

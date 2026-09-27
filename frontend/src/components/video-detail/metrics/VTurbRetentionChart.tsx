@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import type { Video, VideoMetrics } from '../../../types/video'
+import { getMediaUrl, updateVideo } from '../../../services/api'
 import { VTurbMetricsBreakdown, type BreakdownTab } from './VTurbMetricsBreakdown'
 import { RetentionChartNavbar, type ChartTab } from './RetentionChartNavbar'
 import { RetentionChartCanvas } from './RetentionChartCanvas'
@@ -14,6 +15,8 @@ import {
   generateHourlyPaths,
   curveRetentionAt,
   generateCurvePaths,
+  getDotYCoordinatePct,
+  getInterpolatedHourly,
 } from './retentionChartHelpers'
 
 interface VTurbRetentionChartProps {
@@ -32,11 +35,40 @@ export const VTurbRetentionChart: React.FC<VTurbRetentionChartProps> = ({
   const [cursorPercent, setCursorPercent] = useState<number>(44) // Ponto padrão 44% (~01:05)
   const chartRef = useRef<HTMLDivElement>(null)
 
+  const [effectiveDuration, setEffectiveDuration] = useState<number>(() =>
+    video.duration > 0 ? video.duration : 0
+  )
+
+  useEffect(() => {
+    if (video.duration > 0) {
+      setEffectiveDuration(video.duration)
+      return
+    }
+
+    if (video.video_url && typeof window !== 'undefined') {
+      const mediaUrl = getMediaUrl(video.video_url)
+      const tempVideo = document.createElement('video')
+      tempVideo.preload = 'metadata'
+      tempVideo.src = mediaUrl
+      const handleLoadedMetadata = () => {
+        if (tempVideo.duration > 0 && !isNaN(tempVideo.duration)) {
+          const dur = Math.round(tempVideo.duration)
+          setEffectiveDuration(dur)
+          updateVideo(video.id, { duration: dur }).catch(() => {})
+        }
+      }
+      tempVideo.addEventListener('loadedmetadata', handleLoadedMetadata)
+      return () => {
+        tempVideo.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      }
+    }
+  }, [video.id, video.duration, video.video_url])
+
   const curveData = metrics.retention_curve && metrics.retention_curve.sessions > 0 ? metrics.retention_curve : null
-  // Sem duração cadastrada, a curva indica até onde há dado; 147s é o padrão antigo do gráfico
+  // Sem duração conhecida, a curva indica até onde há dado; 147s é o padrão antigo do gráfico
   const duration =
-    video.duration > 0
-      ? video.duration
+    effectiveDuration > 0
+      ? effectiveDuration
       : curveData
       ? curveData.values.length * curveData.bucket_seconds
       : 147
@@ -46,10 +78,10 @@ export const VTurbRetentionChart: React.FC<VTurbRetentionChartProps> = ({
   // Marcadores de tempo do eixo X
   const timeTicks = getTimeTicks(duration)
 
-  // Cálculo de retenção nos marcos e interpolação
-  const retentionValues = getRetentionValues(metrics, totalPlays)
+  // Cálculo de retenção nos marcos e interpolação (baseado em espectadores únicos)
   const uniquePlaysCount = metrics.unique_plays ?? 0
   const audienceBase = uniquePlaysCount > 0 ? uniquePlaysCount : totalPlays
+  const retentionValues = getRetentionValues(metrics, audienceBase)
 
   // Dados para o modo horário (24h)
   const maxActivity = Math.max(
@@ -83,13 +115,29 @@ export const VTurbRetentionChart: React.FC<VTurbRetentionChartProps> = ({
   const activePathD = activeTab === 'hourly' ? hourlyPathD : retentionPathD
   const activeAreaD = activeTab === 'hourly' ? hourlyAreaD : retentionAreaD
 
-  // Posição vertical do ponto no scrubber
-  const dotYPct =
+  // Posição vertical do ponto no scrubber calculada com a mesma escala exata da curva SVG
+  const currentActivityPct =
     activeTab === 'hourly'
-      ? 100 - (selectedHourData.plays / maxActivity) * 100
+      ? getInterpolatedHourly(cursorPercent, hourlyList, maxActivity)
       : totalPlays > 0 || curve
-      ? 100 - currentRetentionData.retention
-      : 98
+      ? currentRetentionData.retention
+      : 0
+
+  const dotYPct = getDotYCoordinatePct(currentActivityPct)
+
+  // Momento do CTA configurado no vídeo para exibição de marcador no gráfico
+  const ctaTime =
+    metrics.cta_metric?.cta_time_seconds ||
+    video.player_settings?.cta_time ||
+    video.player_settings?.pitch_delay?.time ||
+    0
+  const ctaXPercent =
+    activeTab === 'retention' && ctaTime > 0 && duration > 0
+      ? Math.min(100, Math.max(0, (ctaTime / duration) * 100))
+      : undefined
+  const ctaLabel =
+    metrics.cta_metric?.cta_time_formatted ||
+    formatTime(ctaTime)
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!chartRef.current) return
@@ -179,6 +227,8 @@ export const VTurbRetentionChart: React.FC<VTurbRetentionChartProps> = ({
               activePathD={activePathD}
               showConversions={showConversions}
               ctrPercent={metrics.ctr}
+              ctaXPercent={ctaXPercent}
+              ctaLabel={ctaLabel}
             >
               {/* Scrubber Interativo: Linha Vertical Tracejada e Ponto */}
               <RetentionChartScrubber

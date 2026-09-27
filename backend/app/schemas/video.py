@@ -121,6 +121,7 @@ class VideoUpdate(BaseModel):
     title: Optional[str] = None
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    duration: Optional[float] = None
     player_settings: Optional[PlayerSettings] = None
     storage_key: Optional[str] = Field(None, pattern=STORAGE_KEY_PATTERN)
     source_size_bytes: Optional[int] = Field(None, ge=0)
@@ -140,7 +141,7 @@ class VideoResponse(BaseModel):
     updated_at: datetime
 
 # Contrato com o player: contracts/analytics-events.json (teste de contrato nos dois lados)
-EventType = Literal["impression", "play", "progress_25", "progress_50", "progress_75", "progress_100", "click"]
+EventType = Literal["impression", "play", "progress_25", "progress_50", "progress_75", "progress_100", "click", "cta_reached", "pitch_reached"]
 EVENT_TYPES: tuple[str, ...] = get_args(EventType)
 MAX_WATCH_SECONDS = 86400.0
 MAX_WATCH_RANGES = 500
@@ -186,6 +187,11 @@ class RetentionCurve(BaseModel):
     sessions: int
     values: List[float]
 
+class CtaMetric(BaseModel):
+    cta_time_seconds: int
+    cta_time_formatted: str
+    audience_reached: int
+    retention_percent: float
 
 class VideoMetricsResponse(BaseModel):
     video_id: str
@@ -206,6 +212,7 @@ class VideoMetricsResponse(BaseModel):
     peak_hour: Optional[PeakHour] = None
     # Curva por segundo: fração das sessões que assistiu cada trecho de `bucket_seconds`
     retention_curve: Optional["RetentionCurve"] = None
+    cta_metric: Optional[CtaMetric] = None
 
 
 class BulkDeleteRequest(BaseModel):

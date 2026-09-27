@@ -213,3 +213,49 @@ def test_distribuicao_por_hora_usa_horario_de_brasilia(db, video, logged):
 
     by_hour = {h["hour"]: h["impressions"] for h in body["hourly_distribution"]}
     assert by_hour[12] == 1
+
+
+# --- regra do dono (v1.0.9): marcos por pessoa única que deu play; alcance da oferta --------
+
+def test_marcos_contam_pessoas_unicas_que_deram_play(db, video, logged):
+    now = datetime.now(UTC)
+    ontem = now - timedelta(days=1)
+    for at in (ontem, now):  # uma parte consolidada, outra ao vivo
+        _event(db, video.id, "play", at, f"real-{at.date()}")
+        _event(db, video.id, "progress_25", at, f"real-{at.date()}")
+        _event(db, video.id, "progress_25", at, f"real-{at.date()}")  # recarregou: mesma pessoa
+        _event(db, video.id, "progress_25", at, f"fantasma-{at.date()}")  # autoplay mudo, sem play
+        if at == ontem:
+            metrics_rollup.run_all(db, now=now)
+
+    body = client.get(f"/videos/{video.id}/metrics?period=all").json()
+
+    assert body["retention"]["25%"] == 2
+
+
+def test_dia_sem_play_conta_todas_as_pessoas_do_marco(db, video, logged):
+    now = datetime.now(UTC)
+    ontem = now - timedelta(days=1)
+    for sid in ("a", "a", "b"):
+        _event(db, video.id, "progress_50", ontem, sid)
+    metrics_rollup.run_all(db, now=now)
+
+    body = client.get(f"/videos/{video.id}/metrics?period=all").json()
+
+    assert body["retention"]["50%"] == 2
+
+
+def test_alcance_da_oferta_vem_da_curva_por_segundo(db, video, logged):
+    video.player_settings = {"cta_time": 2}
+    db.commit()
+    now = datetime.now(UTC)
+    _session(db, video.id, "a", now.date(), [[0, 4]])
+    _session(db, video.id, "b", now.date(), [[0, 1.5]])
+
+    cta = client.get(f"/videos/{video.id}/metrics?period=all").json()["cta_metric"]
+
+    assert cta == {"cta_time_seconds": 2, "cta_time_formatted": "00:02", "audience_reached": 1, "retention_percent": 50.0}
+
+
+def test_sem_oferta_configurada_nao_ha_metrica(db, video, logged):
+    assert client.get(f"/videos/{video.id}/metrics?period=all").json()["cta_metric"] is None

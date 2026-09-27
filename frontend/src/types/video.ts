@@ -143,6 +143,13 @@ export interface PeakHour {
   total_activity: number
 }
 
+export interface CtaMetric {
+  cta_time_seconds: number
+  cta_time_formatted: string
+  audience_reached: number
+  retention_percent: number
+}
+
 export interface VideoMetrics {
   video_id: string
   period?: string
@@ -165,4 +172,5 @@ export interface VideoMetrics {
   retention_curve?: RetentionCurve | null
   hourly_distribution?: HourlyMetric[]
   peak_hour?: PeakHour | null
+  cta_metric?: CtaMetric | null
 }

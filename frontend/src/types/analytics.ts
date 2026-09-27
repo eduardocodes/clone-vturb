@@ -7,6 +7,8 @@ export const EVENT_TYPES = [
   'progress_75',
   'progress_100',
   'click',
+  'cta_reached',
+  'pitch_reached',
 ] as const
 
 export type AnalyticsEventType = (typeof EVENT_TYPES)[number]

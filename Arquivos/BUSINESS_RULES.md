@@ -27,8 +27,12 @@ Documento de referência para decisões de arquitetura e produto do ProjetoVturb
 ---
 
 ## 3. Métricas e Performance (Analytics)
-- [x] O player embedado dispara eventos em tempo real (`impression`, `play`, `progress` em 25%, 50%, 75%, 100%, e `click`).
-- [x] Prevenção de duplicação de impressões por duplo carregamento/StrictMode com flag de ciclo de vida.
+- [x] O player embedado dispara eventos em tempo real (`impression`, `play`, `progress` em 25%, 50%, 75%, 100%, `cta_reached`, `pitch_reached` e `click`).
+- [x] Prevenção de duplicação de impressões por duplo carregamento/StrictMode com flag de ciclo de vida e deduplicação estrita por espectador único (`DISTINCT session_id`).
+- [x] **Blindagem de Precisão nas Métricas (Quiz & Embeds Externos)**:
+  1. **Bloqueio de Telemetria em Smart Autoplay Mudo**: Enquanto o vídeo estiver apenas rodando mudo atrás da capa do Smart Autoplay (*"Clique para Ouvir"*), o player bloqueia o disparo de `progress_25`, `progress_50`, `progress_75`, `progress_100`, `cta_reached`, `pitch_reached` e pixels de conversão, contabilizando retenção e alcance da oferta estritamente após o espectador iniciar/desmutar a reprodução. No backend, apenas sessões com evento `play` registrado são elegíveis para contagem nos marcos de retenção e alcance da CTA.
+  2. **Detecção de Visibilidade Real (`IntersectionObserver` & `isElementCurrentlyVisible`)**: Se a página externa (ex: Quiz multi-etapas) pré-carregar o `<iframe>` oculto (`display: none`, `visibility: hidden` ou dimensões `0x0`), o player aguarda ficar efetivamente visível na tela do visitante antes de registrar `impression` e iniciar o autoplay/play.
+  3. **ID de Visitante 1st-Party Persistente (`?sid=`)**: O script de incorporação sincroniza o `vturb_visitor_id` a partir do `localStorage` primário da página mãe (1st-party) para a URL do `<iframe>` (`?sid=...`) com fallback em `sessionStorage`, impedindo duplicação de sessões em navegadores In-App (Instagram/Facebook Ads) e Safari iOS (ITP).
 - [x] O painel apresenta indicadores de:
   - Total de Impressões (Visualizações totais do Player)
   - Impressões Únicas (Visitantes distintos identificados por session_id persistente)
@@ -38,7 +42,9 @@ Documento de referência para decisões de arquitetura e produto do ProjetoVturb
   - Cliques no Player / CTA (CTR)
 - [x] Toda agregação respeita o identificador do vídeo.
 - [x] Os tipos de evento aceitos vêm de `contracts/analytics-events.json`, lido pelo backend e pelo frontend (teste de contrato nos dois lados). Evento fora da lista é recusado com 422.
-- [x] Deduplicação: só `play` repetido pela mesma sessão em menos de 1 segundo é descartado (duplo disparo do player). Impressões e marcos contam a cada carregamento; os totais contam tudo e os únicos são sessões distintas por dia.
+- [x] Deduplicação: só `play` repetido pela mesma sessão em menos de 1 segundo é descartado (duplo disparo do player). Impressões contam a cada carregamento; os totais contam tudo e os únicos são pessoas (sessões) distintas por dia, somadas no período.
+- [x] Marcos de 25/50/75/100% contam pessoas únicas por dia, só entre as que deram play no dia (quem ficou no autoplay mudo atrás da capa não conta). Dia sem nenhum play conta todas as pessoas do marco.
+- [x] Alcance da oferta (`cta_metric`): pessoas que assistiram o segundo configurado em `cta_time` (ou `pitch_delay.time`), lido da curva por segundo. Sem curva (players antigos), cai na contagem pelos eventos `cta_reached`/`pitch_reached`/marcos.
 - [x] Retenção por segundo: o player envia os trechos assistidos (segundos do vídeo, não do relógio) a cada 30s, ao esconder a aba e ao terminar, via `sendBeacon` (`POST /videos/{id}/watch`, `text/plain`). O backend une os trechos por sessão e dia, limita a 500 trechos e à duração do vídeo (teto de 4h) e preenche a duração do vídeo se ela estiver zerada.
 - [x] A curva de retenção é a fração de sessões que viram cada segundo; o tempo médio assistido é o total de segundos assistidos dividido pelas sessões.
 - [x] Consolidação: o container `worker` roda a cada `WORKER_MAINTENANCE_INTERVAL` (padrão 300s), com trava no Postgres para rodar uma instância por vez. Fecha horas encerradas (totais) e dias encerrados (únicos e curva). O painel soma o consolidado até a watermark com o bruto depois dela, então os números ficam ao vivo.
@@ -46,7 +52,13 @@ Documento de referência para decisões de arquitetura e produto do ProjetoVturb
 - [x] Dispositivo, país, sistema, navegador e origem ainda não são coletados: o painel diz isso em vez de mostrar números de exemplo.
 - [x] Filtros por data e período: suporte a Hoje (`today`), Ontem (`yesterday`), 7 Dias (`7d`), 30 Dias (`30d`), 1 Ano (`1y`), Todo o Período (`all`) e Intervalo Personalizado (De / Até).
 - [x] Gráfico estilo VTurb de distribuição horária (24 horas) com identificação automática do horário de pico de acessos/plays e consolidação por turnos (madrugada, manhã, tarde, noite).
-- [x] Gráfico Oficial VTurb de Retenção & Audiência: Gráfico com visual dark (#000000), imagem do vídeo centralizada na área gráfica com efeito de fusão, curva SVG verde neon suave, eixos Y (0% a 100%) e X com timestamps calculados pela duração do vídeo (ou distribuição horária 24h), linha vertical tracejada interativa (scrubber com ponto verde) e tooltip flutuante exibindo tempo/horário, audiência e retenção, além de sub-navegação por Dispositivos, Navegadores, Países e Origem do Tráfego.
+- [x] Gráfico Oficial VTurb de Retenção & Audiência: Gráfico com visual dark (#000000), imagem do vídeo centralizada na área gráfica com efeito de fusão, curva SVG verde neon suave, eixos Y (0% a 100%) e X com timestamps calculados pela duração real do vídeo (com auto-detecção e persistência automática de `duration` via metadados HTML5 quando o vídeo possui `duration <= 0`), linha vertical tracejada interativa (scrubber com ponto verde centralizado na linha via interpolação cúbica de Bézier exata por Newton-Raphson) e tooltip flutuante exibindo tempo/horário, audiência e retenção, além de sub-navegação por Dispositivos, Navegadores, Países e Origem do Tráfego.
+- [x] **Configuração Rápida e Métrica de Alcance da Oferta (CTA)**:
+  - Na própria aba **Métricas**, há uma barra de configuração rápida (**Momento da Oferta / CTA**) onde o usuário define o minuto e segundo exatos da oferta (ex: `02:15`).
+  - Ao configurar o horário da CTA, o painel exibe em destaque imediato:
+    1. **Card "🎯 Chegaram na Oferta (CTA)"** na Visão Geral, mostrando o número exato de espectadores únicos que assistiram até o segundo da oferta (`audience_reached`) e a porcentagem de retenção na oferta (`retention_percent`).
+    2. **Marcador Vertical no Gráfico de Retenção** (`🎯 Oferta MM:SS`) indicando visualmente na curva onde a oferta entra.
+    3. **Barra Destacada no Funil de Retenção** exibindo a conversão até o momento da CTA junto aos marcos de 25%, 50%, 75% e 100%.
 - [x] Todo cálculo de data, filtros de período (Hoje, Ontem, etc.) e distribuição horária (00h às 23h) é obrigatoriamente referenciado no Horário Oficial de Brasília (BRT / UTC-3, fuso America/Sao_Paulo).
 
 ---

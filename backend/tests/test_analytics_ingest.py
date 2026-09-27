@@ -193,3 +193,10 @@ def test_duracao_do_player_nao_sobrescreve_duracao_conhecida(video_id):
     db = SessionLocal()
     assert db.get(Video, video_id).duration == pytest.approx(120)
     db.close()
+
+
+@pytest.mark.parametrize("event_type", ["cta_reached", "pitch_reached"])
+def test_eventos_de_oferta_do_player_sao_aceitos(video_id, event_type):
+    res = client.post(f"/videos/{video_id}/events", json={"event_type": event_type, "session_id": "s1", "watch_time_seconds": 135})
+    assert res.status_code == 201
+    assert _count(video_id, event_type=event_type) == 1

@@ -71,4 +71,61 @@ describe('EmbedPlayer Direct Audio and Unlock Tests', () => {
       expect(screen.queryByTestId('direct-unmute-banner')).not.toBeInTheDocument()
     })
   })
+
+  it('sincroniza o visitor_id 1st-party vindo da URL (?sid=) e bloqueia retenção/CTA durante Smart Autoplay mudo até o clique', async () => {
+    const originalUrl = window.location.href
+    window.history.pushState({}, '', '/embed/vid-smart-muted?sid=vis_quiz_lead_999')
+
+    const mockSmartMutedVideo: Video = {
+      id: 'vid-smart-muted',
+      title: 'VSL Smart Autoplay Mudo',
+      video_url: 'https://cdn.exemplo.com/smart.mp4',
+      duration: 100,
+      player_settings: {
+        cta_time: 40,
+        smart_autoplay: {
+          enabled: true,
+          mode: 'smart',
+          button_text: 'CLIQUE PARA OUVIR',
+        },
+      },
+    }
+
+    window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
+
+    const telemetryEvents: Array<{ event_type: string; session_id: string }> = []
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/events') && init?.body) {
+        telemetryEvents.push(JSON.parse(init.body as string))
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'ok' }) })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockSmartMutedVideo),
+      })
+    })
+
+    const { container } = render(<EmbedPlayer videoId={mockSmartMutedVideo.id} />)
+
+    await waitFor(() => {
+      expect(container.querySelector('video')).toBeInTheDocument()
+    })
+
+    const videoEl = container.querySelector('video') as HTMLVideoElement
+    Object.defineProperty(videoEl, 'duration', { value: 100, writable: true })
+
+    // Simula o vídeo rodando mudo atrás da capa aos 50s (passou de 25%, 50% e do CTA de 40s)
+    videoEl.currentTime = 50
+    videoEl.dispatchEvent(new Event('timeupdate'))
+
+    // NENHUM evento de progress_25, progress_50 ou cta_reached deve ter sido enviado enquanto mudo no Smart Autoplay!
+    expect(telemetryEvents.some((e) => e.event_type === 'progress_25')).toBe(false)
+    expect(telemetryEvents.some((e) => e.event_type === 'progress_50')).toBe(false)
+    expect(telemetryEvents.some((e) => e.event_type === 'cta_reached')).toBe(false)
+
+    // O evento de impression deve ter usado o sid 1st-party da página mãe do Quiz
+    expect(telemetryEvents.some((e) => e.event_type === 'impression' && e.session_id === 'vis_quiz_lead_999')).toBe(true)
+
+    window.history.pushState({}, '', originalUrl)
+  })
 })

@@ -1,5 +1,5 @@
 {
-  "description": "Contrato dos eventos que o player envia para POST /videos/{id}/events. Lido pelos testes do backend e do frontend: mudar aqui obriga a mudar os dois lados.",
+  "description": "Contrato dos eventos que o player envia para POST /videos/{id}/events. Lido pelos testes do backend e do frontend: mudar aqui obriga a mudar os dois lados. cta_reached/pitch_reached: a pessoa assistiu até o momento da oferta/pitch (uma vez por carregamento).",
   "event_types": [
     "impression",
     "play",
@@ -7,7 +7,9 @@
     "progress_50",
     "progress_75",
     "progress_100",
-    "click"
+    "click",
+    "cta_reached",
+    "pitch_reached"
   ],
   "burst_deduplicated": {
     "event_types": [

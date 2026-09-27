@@ -11,6 +11,7 @@ interface UseAutoplayProps {
   setIsMuted: (val: boolean) => void
   setIsSmartAutoplaying: (val: boolean) => void
   setShowDirectUnmuteBanner: (val: boolean) => void
+  isPlayerVisible?: boolean
 }
 
 export function useAutoplay({
@@ -22,13 +23,16 @@ export function useAutoplay({
   setIsMuted,
   setIsSmartAutoplaying,
   setShowDirectUnmuteBanner,
+  isPlayerVisible = true,
 }: UseAutoplayProps) {
   const playSentRef = useRef(false)
+  const autoplayStartedRef = useRef(false)
 
   useEffect(() => {
-    if (!video) return
+    if (!video || !isPlayerVisible || autoplayStartedRef.current) return
     const smart = video.player_settings?.smart_autoplay
     if (smart?.enabled) {
+      autoplayStartedRef.current = true
       const isDirect = smart.mode === 'direct'
       if (isDirect) {
         setIsSmartAutoplaying(false)
@@ -60,6 +64,10 @@ export function useAutoplay({
                       videoRef.current.volume = 1.0
                       setIsMuted(false)
                       setShowDirectUnmuteBanner(false)
+                    }
+                    if (!playSentRef.current) {
+                      playSentRef.current = true
+                      sendTelemetryEvent(videoId, { event_type: 'play', session_id: visitorId })
                     }
                     cleanupListeners()
                   }
@@ -114,5 +122,5 @@ export function useAutoplay({
         }
       }
     }
-  }, [video, videoId, visitorId, videoRef, setIsPlaying, setIsMuted, setIsSmartAutoplaying, setShowDirectUnmuteBanner])
+  }, [video, videoId, visitorId, videoRef, setIsPlaying, setIsMuted, setIsSmartAutoplaying, setShowDirectUnmuteBanner, isPlayerVisible])
 }
