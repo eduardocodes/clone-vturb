@@ -201,6 +201,18 @@ class StorageService:
         res = self.get_s3_client().head_object(Bucket=self.config.bucket, Key=key)
         return {"size": res["ContentLength"], "content_type": res.get("ContentType")}
 
+    # --- arquivos do worker (transcode) ------------------------------------------
+
+    def download_file(self, key: str, path: str) -> None:
+        """Baixa o objeto para disco em partes (nunca inteiro na memória)."""
+        self.get_s3_client().download_file(self.config.bucket, key, path)
+
+    def upload_path(self, path: str, key: str, content_type: str, cache_control: str) -> None:
+        self.get_s3_client().upload_file(
+            path, self.config.bucket, key,
+            ExtraArgs={"ContentType": content_type, "CacheControl": cache_control},
+        )
+
     # --- limpeza ----------------------------------------------------------------
 
     def delete_object(self, key: str) -> None:

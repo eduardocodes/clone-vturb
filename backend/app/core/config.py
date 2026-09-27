@@ -49,6 +49,8 @@ class Settings:
     MAX_VIDEO_BYTES: int = int(os.getenv("MAX_VIDEO_BYTES", str(4 * 1024**3)))
     MAX_IMAGE_BYTES: int = int(os.getenv("MAX_IMAGE_BYTES", str(10 * 1024**2)))
     UPLOAD_PART_SIZE: int = int(os.getenv("UPLOAD_PART_SIZE", str(16 * 1024**2)))
+    # Transcode para HLS pelo worker. Desligado por padrão: sem worker rodando, o vídeo ficaria "processando"
+    HLS_ENABLED: bool = _bool(os.getenv("HLS_ENABLED", "false"))
 
     # Configurações do Backblaze B2 Storage
     BACKBLAZE_KEY_ID: str = os.getenv("BACKBLAZE_KEY_ID", "")

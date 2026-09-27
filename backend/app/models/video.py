@@ -47,6 +47,10 @@ class Video(Base):
     source_size_bytes = Column(BigInteger, nullable=True)
     # ready | processing | failed (processamento de HLS)
     status = Column(String(20), nullable=False, default="ready", server_default="ready")
+    # Master playlist do HLS (videos/<uuid>/hls/<job_id>/master.m3u8). Nula até o worker terminar.
+    hls_url = Column(String(1024), nullable=True)
+    # Motivo curto da falha do processamento (o detalhe fica no log e em jobs.last_error)
+    processing_error = Column(String(500), nullable=True)
 
     analytics = relationship("VideoAnalytics", back_populates="video", cascade="all, delete-orphan")
 

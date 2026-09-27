@@ -12,6 +12,7 @@ from app.core.migrations import BASELINE_REVISION, alembic_config, run_migration
 from tests.db_utils import derive_test_database_url, recreate_database
 
 import app.models.backup  # noqa: F401
+import app.models.job  # noqa: F401
 import app.models.metrics  # noqa: F401
 import app.models.user  # noqa: F401
 import app.models.video  # noqa: F401

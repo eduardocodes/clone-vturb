@@ -116,6 +116,9 @@ export interface Video {
   player_settings: PlayerSettings
   /** Processamento da mídia no servidor (HLS) */
   status?: 'ready' | 'processing' | 'failed'
+  /** Master playlist do HLS gerado pelo worker; sem ela o player usa o MP4 de video_url */
+  hls_url?: string | null
+  processing_error?: string | null
   created_at: string
   updated_at: string
 }

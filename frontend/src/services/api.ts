@@ -252,6 +252,20 @@ export async function uploadFile(file: File): Promise<{ filename: string; url: s
   }
 }
 
+/** Gera o HLS de novo (ex.: depois de uma falha no processamento). */
+export async function reprocessVideo(id: string): Promise<Video> {
+  const res = await fetch(`${API_BASE}/videos/${id}/reprocess`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  handleAuthResponse(res)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail || 'Falha ao reprocessar o vídeo.')
+  }
+  return res.json()
+}
+
 export function getMediaUrl(url?: string): string {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) {

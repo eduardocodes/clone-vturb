@@ -3,6 +3,7 @@ import { Play, Trash2, Video as VideoIcon, Plus, Sliders } from 'lucide-react'
 import type { Video } from '../types/video'
 import { getMediaUrl } from '../services/api'
 import { VideoPagination } from './VideoPagination'
+import { VideoProcessingBadge } from './VideoProcessingBadge'
 
 interface VideoListProps {
   videos: Video[]
@@ -347,6 +348,7 @@ export const VideoList: React.FC<VideoListProps> = ({
               >
                 {video.title}
               </span>
+              <VideoProcessingBadge video={video} />
             </div>
           </div>
 

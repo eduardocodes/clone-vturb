@@ -137,6 +137,8 @@ class VideoResponse(BaseModel):
     plays_count: Optional[int] = 0
     player_settings: Dict[str, Any]
     status: str = "ready"
+    hls_url: Optional[str] = None
+    processing_error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

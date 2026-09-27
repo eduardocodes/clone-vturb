@@ -34,6 +34,7 @@ services:
       STORAGE_SECRET_ACCESS_KEY: vturbdevsecret
       STORAGE_BUCKET: vturb-dev
       STORAGE_PUBLIC_URL: http://localhost:8333/vturb-dev
+      HLS_ENABLED: "true"
       STORAGE_REGION: us-east-1
     ports:
       - "8003:8000"
@@ -61,6 +62,7 @@ services:
       STORAGE_SECRET_ACCESS_KEY: vturbdevsecret
       STORAGE_BUCKET: vturb-dev
       STORAGE_PUBLIC_URL: http://localhost:8333/vturb-dev
+      HLS_ENABLED: "true"
       STORAGE_REGION: us-east-1
       WORKER_MAINTENANCE_INTERVAL: "60"
     volumes:

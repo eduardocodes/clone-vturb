@@ -12,9 +12,19 @@ Documento de referência para decisões de arquitetura e produto do ProjetoVturb
   - Com storage configurado (`STORAGE_*`, ou as antigas `BACKBLAZE_*`), o navegador envia o arquivo direto para o bucket com URLs assinadas pelo backend. O arquivo nunca passa pelo backend nem pelo proxy/tunnel (sem estouro de memória nem limite de 100 MB por requisição da Cloudflare).
   - Vídeo: multipart em partes de 16 MB (4 em paralelo, 3 tentativas por parte, progresso real). Capa: PUT único. Limites: vídeo até `MAX_VIDEO_BYTES` (4 GB), imagem até `MAX_IMAGE_BYTES` (10 MB).
   - Chaves: `videos/<uuid>/source.<ext>` e `thumbs/<uuid>.<ext>`. O vídeo guarda `storage_key`; a URL pública é derivada dela no servidor (`STORAGE_PUBLIC_URL`, domínio próprio do bucket servido pela CDN).
-  - Excluir um vídeo (simples ou em massa) ou trocar o arquivo apaga a pasta `videos/<uuid>/` e a capa do storage. Falha no storage só vira log; a exclusão no banco não é bloqueada.
+  - Excluir um vídeo (simples ou em massa) ou trocar o arquivo apaga a pasta `videos/<uuid>/` (original e HLS) e a capa do storage. Se o storage falhar, a limpeza vira job e o worker tenta de novo; a exclusão no banco não é bloqueada.
   - Sem storage configurado, o envio antigo pelo backend continua funcionando em dev (grava em `static/uploads`). Em produção é recusado (503) em vez de cair calado no disco.
   - Configuração do bucket (R2): CORS com `AllowedOrigins`=[domínio do painel], `AllowedMethods`=[PUT, GET, HEAD], `ExposeHeaders`=[ETag] (sem o ETag o multipart falha); regra de lifecycle abortando multipart incompleto após 1 dia; domínio próprio (ex.: `video.seudominio.com`) com Cache Rule "Cache Everything".
+- [x] **Streaming adaptativo (HLS)**, ligado por `HLS_ENABLED=true` na API e no worker (desligado por padrão: sem worker, o vídeo ficaria "processando"):
+  - Vídeo enviado para o storage entra em `processing` e ganha um job `transcode_hls` na fila do Postgres (tabela `jobs`, sem Redis). Enquanto processa, o player toca o MP4 original.
+  - O worker baixa o original para disco, lê com `ffprobe` e gera HLS em fMP4 com segmentos de 4s e keyframe a cada segmento. Escada: 360p/800k, 540p/1.4M, 720p/2.5M, 1080p/4.5M, sem upscale; fonte entre degraus ganha um degrau no tamanho original; vídeo vertical usa o lado menor.
+  - Saída em `videos/<uuid>/hls/<job_id>/` com `Cache-Control: public, max-age=31536000, immutable` (caminho versionado). Ao terminar, grava `hls_url`, `status=ready` e a duração real. Um HLS anterior do mesmo vídeo vai para a fila de limpeza (`delete_prefix`).
+  - Falha: até 3 tentativas com espera de 1 min e 5 min; depois `status=failed` com um motivo curto em `processing_error` (o detalhe fica no log e em `jobs.last_error`). O MP4 segue tocando. O painel mostra "Processando"/"Falhou" e permite reprocessar (`POST /videos/{id}/reprocess`, o HLS atual segue no ar até o novo ficar pronto).
+  - Vídeo apagado ou trocado durante o transcode: o resultado é descartado e apagado do storage. Trocar por URL externa zera o HLS.
+  - Worker parado (deploy/SIGTERM) devolve o job à fila sem gastar tentativa; worker morto sem aviso tem o job retomado por outro após 10 min sem heartbeat.
+  - Player: Safari/iOS (e Chrome recente) tocam HLS nativo; os demais carregam o hls.js (build light, versão fixa, import dinâmico só quando o vídeo tem HLS). Qualquer falha (sem MSE, erro ao carregar o hls.js, erro fatal de rede/mídia) volta para o MP4 no mesmo ponto. O autoplay espera a fonte ficar pronta.
+  - O hls.js baixa playlist e segmentos por XHR: o CORS do bucket precisa liberar GET para o domínio de onde o embed é servido (o painel).
+  - Recursos: o ffmpeg abre um encoder por qualidade (`HLS_THREADS` threads cada), então o teto de CPU é o limite do container do worker; pico medido de ~700 MiB num 1080p. O disco do worker precisa de ~2,5x o tamanho do maior original (original + saída temporária).
 
 ---
 

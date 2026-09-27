@@ -157,3 +157,20 @@ def test_producao_com_falha_no_s3_propaga_o_erro():
     service._s3_client.upload_fileobj.side_effect = RuntimeError("s3 fora")
     with pytest.raises(RuntimeError):
         service.upload_file(io.BytesIO(b"x"), "v.mp4", "video/mp4")
+
+
+def test_download_para_arquivo_em_streaming(tmp_path):
+    service = _service()
+    service.download_file("videos/x/source.mp4", str(tmp_path / "in.mp4"))
+    service._s3_client.download_file.assert_called_once_with("vturb-videos", "videos/x/source.mp4", str(tmp_path / "in.mp4"))
+
+
+def test_upload_de_arquivo_com_tipo_e_cache(tmp_path):
+    service = _service()
+    path = tmp_path / "master.m3u8"
+    path.write_text("#EXTM3U")
+    service.upload_path(str(path), "videos/x/hls/1/master.m3u8", "application/vnd.apple.mpegurl", "public, max-age=31536000, immutable")
+    service._s3_client.upload_file.assert_called_once_with(
+        str(path), "vturb-videos", "videos/x/hls/1/master.m3u8",
+        ExtraArgs={"ContentType": "application/vnd.apple.mpegurl", "CacheControl": "public, max-age=31536000, immutable"},
+    )

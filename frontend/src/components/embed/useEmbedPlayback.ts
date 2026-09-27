@@ -13,6 +13,8 @@ interface UseEmbedPlaybackOptions {
   containerRef: React.RefObject<HTMLDivElement | null>
   setIsVideoReady: (ready: boolean) => void
   isVideoReady: boolean
+  /** false enquanto a fonte (hls.js) carrega: o autoplay espera para não perder o play */
+  isSourceReady?: boolean
 }
 
 export function useEmbedPlayback({
@@ -23,6 +25,7 @@ export function useEmbedPlayback({
   containerRef,
   setIsVideoReady,
   isVideoReady,
+  isSourceReady = true,
 }: UseEmbedPlaybackOptions) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
@@ -106,7 +109,7 @@ export function useEmbedPlayback({
     setIsMuted,
     setIsSmartAutoplaying,
     setShowDirectUnmuteBanner,
-    isPlayerVisible,
+    isPlayerVisible: isPlayerVisible && isSourceReady,
   })
 
   useEffect(() => {

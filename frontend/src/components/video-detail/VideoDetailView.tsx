@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { ArrowLeft, Video as VideoIcon } from 'lucide-react'
 import type { Video } from '../../types/video'
-import { getMediaUrl } from '../../services/api'
+import { fetchVideo, getMediaUrl, reprocessVideo } from '../../services/api'
+import { VideoProcessingBadge } from '../VideoProcessingBadge'
 import { VideoDetailSidebar, type ActiveTab } from './VideoDetailSidebar'
 import { VideoSettingsTab } from './VideoSettingsTab'
 import { VideoStylingTab } from './VideoStylingTab'
@@ -112,6 +113,19 @@ export const VideoDetailView: React.FC<VideoDetailViewProps> = ({
             >
               {video.title}
             </h2>
+            <VideoProcessingBadge
+              video={video}
+              onChange={onUpdateVideo}
+              fetchVideo={fetchVideo}
+              onReprocess={async (v) => {
+                try {
+                  onUpdateVideo(await reprocessVideo(v.id))
+                  showToast('Processamento reiniciado.')
+                } catch (err) {
+                  showToast(err instanceof Error ? err.message : 'Falha ao reprocessar o vídeo.')
+                }
+              }}
+            />
           </div>
         </div>
       </div>

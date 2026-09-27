@@ -19,6 +19,7 @@ import {
   parseEmbedDimensions,
   computeEmbedContainerStyle,
 } from './embed'
+import { useHlsSource } from './embed/useHlsSource'
 
 interface EmbedPlayerProps {
   videoId: string
@@ -40,6 +41,11 @@ export const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ videoId }) => {
     video,
     videoRef,
     isTransparent,
+  })
+
+  const { ready: isSourceReady } = useHlsSource(videoRef, {
+    hlsUrl: video?.hls_url ? getMediaUrl(video.hls_url) : null,
+    mp4Url: video ? getMediaUrl(video.video_url) : '',
   })
 
   const {
@@ -80,6 +86,7 @@ export const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ videoId }) => {
     containerRef,
     setIsVideoReady,
     isVideoReady,
+    isSourceReady,
   })
 
   const {
@@ -163,7 +170,8 @@ export const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ videoId }) => {
 
       <video
         ref={videoRef}
-        src={getMediaUrl(video.video_url)}
+        // Com HLS, a fonte é ligada pelo useHlsSource (hls.js ou nativo); o MP4 fica de reserva
+        src={video.hls_url ? undefined : getMediaUrl(video.video_url)}
         poster={getMediaUrl(video.thumbnail_url)}
         controls={false}
         controlsList={antiDownloadActive ? 'nodownload' : undefined}
