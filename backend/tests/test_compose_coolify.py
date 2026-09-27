@@ -83,3 +83,16 @@ def test_worker_usa_a_mesma_imagem_e_espera_o_backend(compose):
     # Migrations rodam no boot do backend: o worker só sobe depois dele saudável
     assert worker["depends_on"]["backend"]["condition"] == "service_healthy"
     assert worker["environment"]["DATABASE_URL"] == backend["environment"]["DATABASE_URL"]
+
+
+def test_hls_ligado_na_api_e_no_worker_juntos(compose):
+    # A API só enfileira transcode se HLS_ENABLED; quem processa é o worker
+    backend = compose["services"]["backend"]["environment"]
+    worker = compose["services"]["worker"]["environment"]
+    assert backend["HLS_ENABLED"] == worker["HLS_ENABLED"] == "${HLS_ENABLED:-true}"
+
+
+def test_worker_tem_limite_de_cpu_e_memoria_para_o_ffmpeg(compose):
+    limits = compose["services"]["worker"]["deploy"]["resources"]["limits"]
+    assert limits["cpus"] == "2"
+    assert limits["memory"] == "1536M"
