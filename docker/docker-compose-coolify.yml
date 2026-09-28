@@ -113,7 +113,7 @@ services:
       dockerfile: docker/frontend/Dockerfile.prod
     restart: unless-stopped
     environment:
-      VITE_API_BASE_URL: ${SERVICE_FQDN_BACKEND}
+      VITE_API_BASE_URL: ${SERVICE_URL_BACKEND}
     depends_on:
       - backend
     deploy:

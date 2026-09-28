@@ -52,6 +52,11 @@ def test_frontend_recebe_so_a_url_da_api(compose):
     assert _env_keys(compose["services"]["frontend"]) == {"VITE_API_BASE_URL"}
 
 
+def test_frontend_recebe_a_url_da_api_com_esquema(compose):
+    # SERVICE_FQDN_* é só o host; sem https:// o painel chama um caminho relativo
+    assert compose["services"]["frontend"]["environment"]["VITE_API_BASE_URL"] == "${SERVICE_URL_BACKEND}"
+
+
 def test_sem_labels_de_swarm(compose):
     for name, service in compose["services"].items():
         assert "labels" not in (service.get("deploy") or {}), f"{name} não deve ter labels do Swarm"
