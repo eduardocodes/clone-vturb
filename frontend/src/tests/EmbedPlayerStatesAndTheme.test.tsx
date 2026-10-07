@@ -8,7 +8,13 @@ describe('EmbedPlayer States and Dark Theme Integrity', () => {
     const el = screen.getByTestId('embed-player-loading')
     expect(el).toBeInTheDocument()
     expect(el).toHaveStyle({ background: '#000000' })
-    expect(screen.getByText('Carregando player...')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBe(el)
+  })
+
+  it('EmbedLoadingState não mostra texto: o embed roda em sites de qualquer idioma', () => {
+    // "Carregando player..." aparecia em app espanhol/italiano do Shiba.
+    render(<EmbedLoadingState />)
+    expect(screen.getByTestId('embed-player-loading').textContent).toBe('')
   })
 
   it('renderiza o EmbedErrorState com fundo 100% preto (#000000) e mensagem informativa amigável', () => {

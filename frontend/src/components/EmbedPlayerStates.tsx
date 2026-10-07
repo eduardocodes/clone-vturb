@@ -4,6 +4,10 @@ import { ShieldAlert } from 'lucide-react'
 export const EmbedLoadingState: React.FC = () => (
   <div
     data-testid="embed-player-loading"
+    // Só o spinner: o embed roda em sites de qualquer idioma, e texto fixo
+    // aparecia em português num app em espanhol.
+    role="status"
+    aria-busy="true"
     style={{
       width: '100%',
       height: '100%',
@@ -26,7 +30,6 @@ export const EmbedLoadingState: React.FC = () => (
         animation: 'spin 0.75s linear infinite',
       }}
     />
-    <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>Carregando player...</span>
   </div>
 )
 
