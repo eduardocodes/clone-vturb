@@ -103,6 +103,8 @@ export interface PlayerSettings {
   transparent_background?: boolean
   remove_black_bars?: boolean
   fit_mode?: 'cover' | 'contain'
+  /** Cookie da LP com o id externo (xid) repassado pelo script de embed. Padrão: `_eid` */
+  external_id_cookie?: string
 }
 
 

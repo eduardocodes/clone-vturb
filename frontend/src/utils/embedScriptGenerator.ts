@@ -11,6 +11,12 @@ interface EmbedCodeOptions {
   transparentBg?: boolean
 }
 
+/** Cookie de onde o script de embed lê o xid. Nome fora do padrão (ou ausente) cai no `_eid`. */
+export const DEFAULT_XID_COOKIE = '_eid'
+export function resolveXidCookieName(value: unknown): string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : DEFAULT_XID_COOKIE
+}
+
 export function generateEmbedCode({
   video,
   embedUrl,
@@ -25,6 +31,7 @@ export function generateEmbedCode({
   const floatingPos = video.player_settings?.floating_player?.position || 'bottom-right'
   const floatingWidth = Number(video.player_settings?.floating_player?.width) || 320
   const isCloseable = video.player_settings?.floating_player?.closeable !== false
+  const xidCookie = resolveXidCookieName(video.player_settings?.external_id_cookie)
 
   const listenerScript = `
 <script>
@@ -35,6 +42,7 @@ export function generateEmbedCode({
   var floatingPos = '${floatingPos}';
   var floatingWidth = ${floatingWidth};
   var isCloseable = ${isCloseable ? 'true' : 'false'};
+  var xidCookie = '${xidCookie}';
 
   var isFloatingDismissed = false;
   var isVideoPlaying = false;
@@ -102,6 +110,31 @@ export function generateEmbedCode({
     window.addEventListener(evt, notifyIframe, { once: true, passive: true });
   });
 
+  function readCookie(name) {
+    var parts = document.cookie ? document.cookie.split(';') : [];
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i].trim();
+      if (part.indexOf(name + '=') === 0) {
+        var raw = part.substring(name.length + 1);
+        try { return decodeURIComponent(raw); } catch(e) { return raw; }
+      }
+    }
+    return '';
+  }
+
+  function resolveXid() {
+    var candidates = [];
+    var box = document.getElementById('vturb-player-' + videoId) || document.getElementById('vturb-wrapper-' + videoId);
+    if (box) candidates.push(box.getAttribute('data-xid'));
+    if (window.SmartVSL) candidates.push(window.SmartVSL.xid);
+    candidates.push(readCookie(xidCookie));
+    for (var i = 0; i < candidates.length; i++) {
+      var c = candidates[i];
+      if (typeof c === 'string' && c) return /^[A-Za-z0-9_-]{1,100}$/.test(c) ? c : '';
+    }
+    return '';
+  }
+
   // Sincronização de ID de visitante 1st-party (evita duplicação no Safari iOS / Instagram Ads)
   try {
     var parentSid = localStorage.getItem('vturb_visitor_id');
@@ -110,8 +143,24 @@ export function generateEmbedCode({
       localStorage.setItem('vturb_visitor_id', parentSid);
     }
     var ifrSid = document.querySelector('iframe[src*="' + videoId + '"]');
-    if (ifrSid && ifrSid.src && ifrSid.src.indexOf('sid=') === -1) {
-      ifrSid.src = ifrSid.src + (ifrSid.src.indexOf('?') !== -1 ? '&' : '?') + 'sid=' + encodeURIComponent(parentSid);
+    if (ifrSid && ifrSid.src) {
+      var srcParams = {};
+      try { new URL(ifrSid.src).searchParams.forEach(function(v, k) { srcParams[k] = true; }); } catch(e) {}
+      var extra = [];
+      if (!srcParams.sid) extra.push('sid=' + encodeURIComponent(parentSid));
+      // Origem do espectador: xid (data-xid > window.SmartVSL.xid > cookie) e utm_* da LP
+      var xid = resolveXid();
+      if (xid && !srcParams.xid) extra.push('xid=' + encodeURIComponent(xid));
+      try {
+        var lpParams = new URLSearchParams(window.location.search);
+        ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'].forEach(function(k) {
+          var v = lpParams.get(k);
+          if (v && !srcParams[k]) extra.push(k + '=' + encodeURIComponent(v));
+        });
+      } catch(e) {}
+      if (extra.length) {
+        ifrSid.src = ifrSid.src + (ifrSid.src.indexOf('?') !== -1 ? '&' : '?') + extra.join('&');
+      }
     }
   } catch(err) {}
 
