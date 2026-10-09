@@ -15,6 +15,7 @@ from app.api.auth import router as auth_router
 from app.api.users import router as users_router
 from app.api.backups import router as backups_router
 from app.api.uploads import router as uploads_router
+from app.api.attribution import router as attribution_router
 
 logger = logging.getLogger("projetovturb")
 logging.basicConfig(level=logging.INFO)
@@ -117,6 +118,7 @@ def create_app(cfg=settings) -> FastAPI:
     application.include_router(uploads_router)
     application.include_router(users_router)
     application.include_router(backups_router, prefix="/backups", tags=["Backups"])
+    application.include_router(attribution_router)
 
     @application.get("/")
     def root():
