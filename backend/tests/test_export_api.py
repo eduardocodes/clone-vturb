@@ -369,3 +369,20 @@ def test_updated_since_obrigatorio_e_valido(value):
 @pytest.mark.parametrize("cursor", ["lixo", "eyJ4IjoxfQ", "!!!"])
 def test_cursor_invalido_responde_422(cursor):
     assert sessions(cursor=cursor).status_code == 422
+
+
+# --- contrato publicado -----------------------------------------------------------
+
+def test_contrato_export_v1_bate_com_as_linhas():
+    from pathlib import Path
+    import json
+
+    candidates = [
+        Path("/contracts/export-v1.json"),
+        Path(__file__).resolve().parent.parent.parent / "contracts" / "export-v1.json",
+    ]
+    path = next((p for p in candidates if p.exists()), None)
+    assert path is not None, "contracts/export-v1.json não encontrado"
+    contract = json.loads(path.read_text())
+    assert set(contract["export"]["endpoints"]["GET /viewer-sessions"]["row_fields"]) == ROW_FIELDS
+    assert contract["version"] == "1"

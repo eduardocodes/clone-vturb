@@ -1,0 +1,70 @@
+{
+  "description": "Contrato publicado v1 da origem do espectador e do export M2M (consumidor: TrackDash, modulo vsl-engagement). Lido pelos testes do backend: mudar aqui obriga a mudar o codigo e o consumidor.",
+  "version": "1",
+  "attribution": {
+    "method": "POST",
+    "path": "/videos/{video_id}/attribution",
+    "auth": "publica (chamada pelo player)",
+    "rate_limit_per_minute_per_ip": 120,
+    "request": {
+      "content_type": "application/json",
+      "fields": {
+        "session_id": "string 1..100, obrigatorio (visitor id do player, o mesmo de /events e /watch)",
+        "xid": "opcional, ^[A-Za-z0-9_-]{1,100}$ (opaco; o TrackDash manda o _eid da LP)",
+        "utm_source": "opcional, truncada em 512",
+        "utm_medium": "opcional, truncada em 512",
+        "utm_campaign": "opcional, truncada em 512",
+        "utm_content": "opcional, truncada em 512",
+        "utm_term": "opcional, truncada em 512"
+      }
+    },
+    "responses": {
+      "204": "gravado (ou ja existia)",
+      "404": "video inexistente",
+      "422": "xid fora do formato ou session_id invalido; nada e gravado",
+      "429": "rate limit (header Retry-After)"
+    },
+    "semantics": "First-touch por (video_id, session_id): UTMs nunca sao sobrescritas; external_id so e preenchido enquanto estiver nulo. UTM vazia vira null.",
+    "embed_script": "O script de embed acrescenta ao src do iframe: sid, xid (data-xid do container > window.SmartVSL.xid > cookie player_settings.external_id_cookie, padrao _eid) e utm_* da URL da LP. O player le xid/utm_* da propria URL e chama este endpoint uma vez por carregamento, na impressao."
+  },
+  "export": {
+    "base_path": "/api/v1/export",
+    "auth": {
+      "header": "X-Api-Key",
+      "check": "hmac.compare_digest(sha256_hex(chave), EXPORT_API_KEY_SHA256)",
+      "env_empty": 404,
+      "missing_or_wrong_key": 401
+    },
+    "endpoints": {
+      "GET /ping": {"response": {"ok": true, "version": "1"}},
+      "GET /videos": {
+        "response": {"videos": [{"id": "string (uuid)", "name": "string", "duration_seconds": "number|null", "pitch_time_seconds": "number|null", "cta_time_seconds": "number|null"}]},
+        "notes": "duration_seconds null quando 0/desconhecida; pitch_time_seconds = player_settings.pitch_delay.time se pitch_delay.enabled; cta_time_seconds = player_settings.cta_time se > 0."
+      },
+      "GET /viewer-sessions": {
+        "query": {
+          "updated_since": "ISO 8601, obrigatorio, exclusivo (sem fuso = UTC); invalido/ausente = 422",
+          "cursor": "opaco (next_cursor da pagina anterior); invalido = 422",
+          "limit": "1..1000, padrao 500; fora da faixa = 422"
+        },
+        "response": {"rows": ["<row>"], "next_cursor": "string|null"},
+        "row_fields": [
+          "video_id", "session_id", "day", "external_id",
+          "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+          "loaded", "played", "p25", "p50", "p75", "p100",
+          "pitch_reached", "cta_reached", "clicked",
+          "watched_seconds", "duration", "ranges", "updated_at"
+        ],
+        "semantics": {
+          "key": "(video_id, session_id, day); day = data UTC (YYYY-MM-DD), mesma convencao de video_watch_sessions.event_date",
+          "flags": "dos eventos do player daquele dia: loaded<-impression, played<-play, p25..p100<-progress_*, pitch_reached, cta_reached, clicked<-click. Nunca derivadas de ranges.",
+          "watch": "watched_seconds, duration, ranges de video_watch_sessions daquele dia; sem linha = 0, null, []",
+          "updated_at": "max(max(evento.created_at), watch_session.updated_at), ISO 8601 com +00:00",
+          "selection": "linhas com evento ou watch alterado depois de updated_since; as flags consideram o dia inteiro",
+          "order": "(updated_at, video_id, session_id, day), keyset",
+          "excluded": "eventos sem session_id"
+        }
+      }
+    }
+  }
+}
