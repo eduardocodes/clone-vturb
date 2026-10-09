@@ -3,6 +3,8 @@ import type { Video } from '../types/video'
 import { sendTelemetryEvent, sendWatchRanges } from '../services/api'
 import { WatchRangeTracker } from '../utils/watchRanges'
 import { triggerTrackingPixels, initTrackingPixels } from '../utils/embedTracking'
+import { sendViewerAttribution } from '../services/attributionApi'
+import { readViewerAttribution } from '../components/embed/viewerAttribution'
 
 /** Envio periódico dos trechos assistidos enquanto houver novidade. */
 const WATCH_FLUSH_INTERVAL_MS = 30_000
@@ -76,6 +78,11 @@ export function useVideoTelemetry({
         session_id: visitorId,
         referer: document.referrer || window.location.href,
       })
+      // Origem do espectador (xid + utm_* repassados pelo script de embed), uma vez por carregamento
+      try {
+        const attribution = readViewerAttribution(window.location.search)
+        if (attribution) sendViewerAttribution(videoId, { session_id: visitorId, ...attribution })
+      } catch {}
     }
   }
 
