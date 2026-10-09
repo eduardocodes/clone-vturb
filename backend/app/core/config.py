@@ -75,6 +75,9 @@ class Settings:
     BREVO_SENDER_EMAIL: str = os.getenv("BREVO_SENDER_EMAIL", "noreply@vturb.com")
     BREVO_SENDER_NAME: str = os.getenv("BREVO_SENDER_NAME", "Smart VSL")
 
+    # Export M2M (/api/v1/export): SHA-256 (hex) da chave do consumidor. Vazio = export desligado (404).
+    EXPORT_API_KEY_SHA256: str = os.getenv("EXPORT_API_KEY_SHA256", "")
+
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"

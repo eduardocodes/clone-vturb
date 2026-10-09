@@ -58,6 +58,8 @@ services:
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
       BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-Smart VSL}
+      # SHA-256 (hex) da chave do export M2M (/api/v1/export). Vazio = export desligado.
+      EXPORT_API_KEY_SHA256: ${EXPORT_API_KEY_SHA256:-}
     depends_on:
       postgres:
         condition: service_healthy

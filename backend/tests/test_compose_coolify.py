@@ -101,3 +101,9 @@ def test_worker_tem_limite_de_cpu_e_memoria_para_o_ffmpeg(compose):
     limits = compose["services"]["worker"]["deploy"]["resources"]["limits"]
     assert limits["cpus"] == "2"
     assert limits["memory"] == "1536M"
+
+
+def test_backend_recebe_hash_da_chave_do_export_vazio_por_padrao(compose):
+    # Sem a env, /api/v1/export/* responde 404 (export desligado)
+    env = compose["services"]["backend"]["environment"]
+    assert env["EXPORT_API_KEY_SHA256"] == "${EXPORT_API_KEY_SHA256:-}"
